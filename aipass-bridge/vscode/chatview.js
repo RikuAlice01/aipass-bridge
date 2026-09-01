@@ -71,6 +71,9 @@ class ChatViewProvider {
       <button id="stop" class="ghost" hidden>Stop</button>
     </div>
     <div class="foot">
+      <select id="model" title="Model" aria-label="Model">
+        <option value="">default</option>
+      </select>
       <div class="modes" role="group" aria-label="Mode">
         <button type="button" id="mode-agent" class="mode on" title="Reads and edits files in this workspace">Agent</button>
         <button type="button" id="mode-ask" class="mode" title="Just asks the model — no files, no preamble">Ask</button>
@@ -88,7 +91,8 @@ class ChatViewProvider {
 
   async onMessage(msg) {
     switch (msg.type) {
-      case 'ready':   return this.refreshStatus();
+      case 'ready':   return this.refresh();
+      case 'model':   return this.setModel(msg.id);
       case 'ask':     return this.ask(msg.text, msg.apply === true, msg.mode);
       case 'cancel':  return this.controller?.abort();
       case 'new':     return this.newChat();
@@ -105,9 +109,49 @@ class ChatViewProvider {
     this.refreshStatus();
   }
 
+  async refresh() {
+    await this.refreshStatus();
+    return this.refreshModels();
+  }
+
+  /// The picker writes to the VS Code setting, not to the bridge's /config.
+  /// /config moves the bridge's own default, which would silently change what
+  /// `npm run chat` and every other OpenAI client on this machine get; a
+  /// choice made in one editor should not reach that far.
+  async setModel(id) {
+    await vscode.workspace
+      .getConfiguration('aipass')
+      .update('model', id, vscode.ConfigurationTarget.Global);
+    return this.refreshModels();
+  }
+
+  async refreshModels() {
+    const bridge = this.deps.bridgeUrl();
+    try {
+      const res = await fetch(`${bridge}/v1/models`);
+      if (!res.ok) return;
+      const { data } = await res.json();
+      const chosen = String(vscode.workspace.getConfiguration('aipass').get('model') || '');
+      this.post({
+        type: 'models',
+        list: (data ?? []).map((m) => ({
+          id: m.id,
+          name: m.name || m.id,
+          free: m.free_credit === true,
+        })),
+        selected: chosen,
+        fallback: this.defaultModel ?? '',
+      });
+    } catch {
+      // The status pill already says the bridge cannot be reached; a second
+      // complaint about the same thing is noise.
+    }
+  }
+
   async refreshStatus() {
     const bridge = this.deps.bridgeUrl();
     const health = await this.deps.probe(bridge);
+    this.defaultModel = health.status?.defaultModel;
     this.post({
       type: 'status',
       ok: health.ok,
@@ -164,6 +208,7 @@ class ChatViewProvider {
     }
 
     const health = await this.refreshStatus();
+    this.refreshModels();
     if (!health.ok) {
       return this.post({ type: 'notice', text: `Cannot reach aipass: ${health.reason}.` });
     }

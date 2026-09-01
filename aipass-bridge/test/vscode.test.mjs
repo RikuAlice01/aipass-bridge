@@ -523,6 +523,88 @@ test('the preamble no longer forces English', async () => {
   assert.match(text, /same language|whatever language/i, 'it should follow the asker instead');
 });
 
+/* ------------------------------------------------------------ model picker */
+
+test('the panel lists the models the account can use', async (t) => {
+  const dir = tempDir({ 'a.txt': 'x' });
+  const ext = await new FakeExtension(bridge.base, {
+    models: [
+      { id: 'gemini-3.1-flash-lite', displayName: 'Gemini 3.1 Flash Lite', isFreeCredit: true },
+      { id: 'claude-sonnet-5@default', displayName: 'Claude Sonnet 5' },
+    ],
+    onChat: scripted(['DONE']),
+  }).connect();
+  t.after(() => ext.disconnect());
+
+  const { panel } = activate({ root: dir });
+  const view = panel();
+  await view.send({ type: 'ready' });
+
+  const models = view.last('models');
+  assert.ok(models, 'the panel should be told what it can pick from');
+  assert.deepEqual(models.list.map((m) => m.id), ['gemini-3.1-flash-lite', 'claude-sonnet-5@default']);
+  assert.equal(models.list[0].free, true, 'free credit is worth showing');
+  assert.equal(models.selected, '', 'nothing chosen yet means the bridge default');
+  assert.equal(models.fallback, 'gemini-3.1-flash-lite', 'and it says which one that is');
+});
+
+test('choosing a model writes the setting, not the bridge default', async (t) => {
+  const dir = tempDir({ 'a.txt': 'x' });
+  const ext = await new FakeExtension(bridge.base, { onChat: scripted(['DONE']) }).connect();
+  t.after(() => ext.disconnect());
+
+  const { panel, recorded } = activate({ root: dir });
+  const view = panel();
+  await view.send({ type: 'model', id: 'claude-sonnet-5@default' });
+
+  assert.deepEqual(recorded.configWrites, [
+    { key: 'model', value: 'claude-sonnet-5@default', target: 1 },
+  ], 'it belongs in this editor, not in the bridge everything else shares');
+
+  // POST /config would have moved the bridge's own default; it must not have.
+  const status = await fetch(`${bridge.base}/status`).then((r) => r.json());
+  assert.equal(status.defaultModel, 'gemini-3.1-flash-lite', 'the CLI is untouched');
+});
+
+test('the chosen model is what actually gets sent', async (t) => {
+  const dir = tempDir({ 'a.txt': 'x' });
+  const ext = await new FakeExtension(bridge.base, { onChat: scripted(['DONE nothing to do']) }).connect();
+  t.after(() => ext.disconnect());
+
+  const { panel } = activate({ root: dir });
+  const view = panel();
+  await view.send({ type: 'model', id: 'claude-sonnet-5@default' });
+  await view.send({ type: 'ask', text: 'anything' });
+
+  assert.equal(ext.chats.at(-1).modelId, 'claude-sonnet-5@default');
+});
+
+test('Ask mode honours the choice too', async (t) => {
+  const dir = tempDir({ 'a.txt': 'x' });
+  const ext = await new FakeExtension(bridge.base, { onChat: scripted(['fine']) }).connect();
+  t.after(() => ext.disconnect());
+
+  const { panel } = activate({ root: dir });
+  const view = panel();
+  await view.send({ type: 'model', id: 'claude-sonnet-5@default' });
+  await view.send({ type: 'ask', text: 'วันนี้วันอะไร', mode: 'ask' });
+
+  assert.equal(ext.chats.at(-1).modelId, 'claude-sonnet-5@default');
+});
+
+test('clearing the choice goes back to whatever the bridge defaults to', async (t) => {
+  const dir = tempDir({ 'a.txt': 'x' });
+  const ext = await new FakeExtension(bridge.base, { onChat: scripted(['DONE']) }).connect();
+  t.after(() => ext.disconnect());
+
+  const { panel } = activate({ root: dir, config: { model: 'claude-sonnet-5@default' } });
+  const view = panel();
+  await view.send({ type: 'model', id: '' });
+  await view.send({ type: 'ask', text: 'anything' });
+
+  assert.equal(ext.chats.at(-1).modelId, 'gemini-3.1-flash-lite', 'the bridge default takes over again');
+});
+
 /* ------------------------------------------------------------ packaged .vsix */
 
 // Inside a .vsix everything above the extension root is gone, so ../agent is

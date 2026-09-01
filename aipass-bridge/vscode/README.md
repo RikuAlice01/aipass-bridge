@@ -37,6 +37,17 @@ conversation.
 
 Tick **write changes straight to disk** to skip staging.
 
+### Picking a model
+
+The dropdown next to the mode toggle lists what the account can use, marking
+the free-credit ones. **default** follows whatever the bridge is set to, and
+names it.
+
+The choice is written to the `aipass.model` setting, not to the bridge's
+`/config`. Moving the bridge's own default would silently change what
+`npm run chat` and every other OpenAI client on the machine gets; a choice made
+in one editor should not reach that far.
+
 ### Agent or Ask
 
 | mode | |

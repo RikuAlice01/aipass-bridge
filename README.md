@@ -273,6 +273,9 @@ line; tool activity collapses into a **steps** block, edits arrive as a staged
 list with **Review** / **Apply** / **Discard**, and **New chat** opens a fresh
 conversation. The panel follows the editor's theme.
 
+A dropdown picks the model — it writes the `aipass.model` setting rather than
+moving the bridge's default, so it does not change what the CLI gets.
+
 Two modes: **Agent** reads and edits files, **Ask** sends the question straight
 to the model with no preamble and no tools — for anything that is not about the
 code. Within one conversation the instructions go out once, so a follow-up turn
@@ -345,7 +348,7 @@ behaviour, and no credential reaches it either. How that is kept honest —
 there is no second test suite, the existing one runs against both:
 
 ```bash
-npm test            # 81 against the Node bridge
+npm test            # 86 against the Node bridge
 npm run test:rust   # the same 76 against the Rust one
 ```
 
@@ -479,7 +482,7 @@ The popup can also change the default model and the bridge URL at runtime.
 
 **Tests fail to even start** — you are probably on an old checkout. Both the
 Windows path bug in the harness and the `process.exit` crash in `chat.mjs` are
-fixed; run `npm test` and expect 81 passing in about two seconds.
+fixed; run `npm test` and expect 86 passing in about two seconds.
 
 ---
 
@@ -527,7 +530,7 @@ out in [aipass-bridge/handoff.html](aipass-bridge/handoff.html).
 | [aipass-bridge/chat.mjs](aipass-bridge/chat.mjs) | terminal chat client |
 | [aipass-bridge/vscode/](aipass-bridge/vscode/) | VS Code extension |
 | [aipass-bridge/rust/](aipass-bridge/rust/) | the same bridge in Rust, as a tray app |
-| [aipass-bridge/test/](aipass-bridge/test/) | 81 tests |
+| [aipass-bridge/test/](aipass-bridge/test/) | 86 tests |
 | [app/](app/) | the Next.js app this repo was scaffolded from — untouched |
 
 ---
@@ -538,7 +541,7 @@ out in [aipass-bridge/handoff.html](aipass-bridge/handoff.html).
 npm test
 ```
 
-81 tests, no dependencies, about two seconds.
+86 tests, no dependencies, about two seconds.
 [test/harness.mjs](aipass-bridge/test/harness.mjs) runs the real bridge as a
 subprocess alongside a scriptable stand-in for the extension, and
 [test/vscode-stub.mjs](aipass-bridge/test/vscode-stub.mjs) does the same for the

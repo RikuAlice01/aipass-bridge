@@ -13,6 +13,7 @@
   const pill = $('#status');
   const modeAgent = $('#mode-agent');
   const modeAsk = $('#mode-ask');
+  const model = $('#model');
 
   let busy = false;
   // Agent reads and edits files; Ask goes straight to the model with no
@@ -157,6 +158,10 @@
         setBusy(data.value);
         break;
 
+      case 'models':
+        renderModels(data);
+        break;
+
       case 'cleared':
         thread.innerHTML = '';
         thread.append(emptyState());
@@ -166,6 +171,27 @@
       default:
         break;
     }
+  });
+
+  // Rebuilt only when something actually changed, or reselecting would fight
+  // the user with the dropdown open.
+  let lastModels = '';
+  function renderModels({ list, selected, fallback }) {
+    const signature = JSON.stringify([list, selected, fallback]);
+    if (signature === lastModels) return;
+    lastModels = signature;
+
+    model.innerHTML = '';
+    const fallbackName = list.find((m) => m.id === fallback)?.name ?? fallback;
+    model.append(new Option(fallbackName ? `default · ${fallbackName}` : 'default', ''));
+    for (const m of list) {
+      model.append(new Option(m.free ? `${m.name} · free` : m.name, m.id));
+    }
+    model.value = list.some((m) => m.id === selected) ? selected : '';
+  }
+
+  model.addEventListener('change', () => {
+    vscode.postMessage({ type: 'model', id: model.value });
   });
 
   function emptyState() {

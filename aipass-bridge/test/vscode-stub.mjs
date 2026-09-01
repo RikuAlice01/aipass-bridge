@@ -63,6 +63,7 @@ export function createVscodeStub({ root, config = {} } = {}) {
     error: [],
     terminals: [],
     appliedEdits: [],
+    configWrites: [],
   };
 
   const defaults = {
@@ -83,10 +84,21 @@ export function createVscodeStub({ root, config = {} } = {}) {
     WorkspaceEdit,
     FileType: { Unknown: 0, File: 1, Directory: 2, SymbolicLink: 64 },
     ThemeIcon: class { constructor(id) { this.id = id; } },
+    ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
 
     workspace: {
       workspaceFolders: root ? [{ uri: Uri.file(root), name: path.basename(root), index: 0 }] : undefined,
-      getConfiguration() { return { get: (key) => settings[key] }; },
+      getConfiguration() {
+        return {
+          get: (key) => settings[key],
+          // Writes land in the same object `get` reads, so a test sees what
+          // the extension would see on the next read.
+          async update(key, value, target) {
+            settings[key] = value;
+            recorded.configWrites.push({ key, value, target });
+          },
+        };
+      },
       fs: {
         async readFile(uri) { return new Uint8Array(fs.readFileSync(uri.fsPath)); },
         async stat(uri) {
