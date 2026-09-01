@@ -1,35 +1,31 @@
 # Extension icons
 
-Generated from [`icon.ico`](../../../icon.ico) at the repo root — the same file
-`build.rs` compiles into the tray app's `.exe`, so the project has one icon
-rather than several that drift.
+Generated from [`logo.png`](../../../logo.png) at the repo root — the project's
+one piece of artwork, at 1200×1200 with a transparent ground. Everything else
+in the project is a downscale of it, so there is one icon rather than several
+that drift.
 
-Chrome wants PNG here, so these are conversions rather than the `.ico` itself.
+Chrome wants PNG here, so these are conversions rather than an `.ico`.
 
-**If `icon.ico` changes, regenerate these.** The Rust build picks a new icon up
-on its own (`cargo:rerun-if-changed`); this folder does not.
+**Do not edit these by hand.** Rebuild every icon in the project — these four,
+`vscode/icon.png`, and the multi-size `icon.ico` the tray app compiles in:
 
 ```bash
-python - <<'EOF'
-from PIL import Image
-src = Image.open('icon.ico').convert('RGBA')
-# NEAREST for whole-number upscales keeps pixel art crisp; LANCZOS elsewhere,
-# because 1.5x nearest gives uneven pixel widths.
-for size, how in {16: 'LANCZOS', 32: None, 48: 'LANCZOS', 128: 'NEAREST'}.items():
-    out = src.copy() if how is None else src.resize((size, size), getattr(Image, how))
-    out.save('aipass-bridge/extension/icons/icon-%d.png' % size, optimize=True)
-EOF
+python tools/icons.py
 ```
 
-Run it from the repo root. Sizes are the four `manifest.json` declares, for both
-`icons` (the extensions page) and `action.default_icon` (the toolbar).
+Run it from the repo root. Pillow is a design-time dependency; nothing at
+runtime needs it.
 
-## Known limitation
+The sizes are the four `manifest.json` declares, for both `icons` (the
+extensions page) and `action.default_icon` (the toolbar).
 
-`icon.ico` holds a single 32×32 image with **no transparency** — 47% of it is
-opaque white, including all four corners. It therefore shows as a white square
-on a dark toolbar or taskbar, and 128 is upscaled from 32 rather than drawn at
-that size.
+## What to expect at small sizes
 
-Both are fixed by replacing `icon.ico` with a larger source that has a
-transparent background, and re-running the snippet above.
+The logo carries a "Bridge" wordmark under the mark. It stays readable down to
+48px; at 32 it is a suggestion, and at 16 only the `Ai` shape survives. That is
+ordinary for a logo with type in it — the 16px slot is a favicon, not a place
+to read a word.
+
+If that ever matters enough to fix, the answer is a separate mark-only artwork
+for the small sizes rather than sharpening this one.

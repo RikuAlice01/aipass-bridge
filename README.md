@@ -339,9 +339,10 @@ attached**, **ready · n tabs**, or **n job(s) in flight** — and its menu show
 the conversation in use and offers **Copy bridge URL**,
 **Open de.aipass.net/chat** and **Quit**.
 
-`icon.ico` at the repo root is the one icon for the project: compiled into the
-`.exe` as a Windows resource, and the source the extension's PNGs are generated
-from.
+`logo.png` at the repo root is the project's one piece of artwork.
+[tools/icons.py](tools/icons.py) renders everything else from it — the
+multi-size `icon.ico` compiled into the `.exe`, and the PNGs both extensions
+use. Run it after changing the logo; nothing is hand-edited.
 
 It is a port, not a rewrite: same routes, same `AIPASS_*` variables, same
 behaviour, and no credential reaches it either. How that is kept honest —

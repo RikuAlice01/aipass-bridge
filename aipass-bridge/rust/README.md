@@ -17,9 +17,13 @@ talked to the Node bridge, on the same `:8787`.
 
 `icon.ico` at the repo root is compiled into the executable by
 [build.rs](build.rs) as ordinal 1 — so Explorer, the taskbar and the tray all
-show the same image, and there is still no asset to ship beside the binary.
-The extension's PNGs are generated from that same file, so the project has one
-icon rather than three that drift.
+show the same image, and there is still no asset to ship beside the binary. It
+carries seven sizes from 16 to 256, so Windows picks one rather than resampling
+a wrong-sized image itself.
+
+Both it and the extensions' PNGs come from `logo.png`, via
+[tools/icons.py](../../tools/icons.py): one artwork, everything else a
+downscale of it.
 
 Status lives in the tooltip and the first menu line: **no browser tab
 attached**, **ready · n tabs**, or **n job(s) in flight**. The menu also shows

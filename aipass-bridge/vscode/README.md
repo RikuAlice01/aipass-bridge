@@ -114,10 +114,11 @@ conversation history. So:
 
 ## The icon
 
-`icon.ico` at the repo root is the project's icon; `icon.png` here is a 128px
-render of it, because VS Code's `icon` field wants a PNG and the source is only
-32×32. `vsce` packages a `.ico` without complaining, which is not the same as
-VS Code drawing it well.
+`logo.png` at the repo root is the project's artwork; `icon.png` here is a
+128px render of it, because VS Code's `icon` field wants a PNG. `vsce` packages
+a `.ico` without complaining, which is not the same as VS Code drawing it well.
+
+Rebuild it with `python tools/icons.py` rather than by hand.
 
 The activity-bar glyph is separate — [media/aipass.svg](media/aipass.svg), a
 monochrome speech bubble drawn with `currentColor`, because VS Code masks
