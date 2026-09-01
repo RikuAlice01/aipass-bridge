@@ -348,7 +348,7 @@ behaviour, and no credential reaches it either. How that is kept honest —
 there is no second test suite, the existing one runs against both:
 
 ```bash
-npm test            # 86 against the Node bridge
+npm test            # 90 against the Node bridge
 npm run test:rust   # the same 76 against the Rust one
 ```
 
@@ -472,6 +472,7 @@ The popup can also change the default model and the bridge URL at runtime.
 | popup says **not connected** with a tab open | the tab predates the extension, or Chrome discarded it | reload the de.aipass.net tab |
 | the reply stops partway and nothing else happens | no delta for `AIPASS_IDLE_TIMEOUT_MS` | check the tab is still alive; raise the timeout for long answers |
 | `Conversation not found` | the id was deleted or invented | `npm run conversations` to see real ones, or `--new` |
+| `403 … CHAT_UNAUTHORIZED … Conversation has been deleted` | that conversation was deleted on the account | nothing — the bridge rotates to the next one on its own |
 | agent: `rejected — splitting into 2 parts` | a file tripped an upstream filter | nothing — it recovers on its own |
 | agent: `omitting 1 line(s) that cannot be sent` | a line looked like code execution | expected; the rest of the file still goes through |
 | agent: `this fragment was rejected even on its own` | a single line cannot pass at any size | it is printed so you can see which |
@@ -482,7 +483,7 @@ The popup can also change the default model and the bridge URL at runtime.
 
 **Tests fail to even start** — you are probably on an old checkout. Both the
 Windows path bug in the harness and the `process.exit` crash in `chat.mjs` are
-fixed; run `npm test` and expect 86 passing in about two seconds.
+fixed; run `npm test` and expect 90 passing in about two seconds.
 
 ---
 
@@ -530,7 +531,7 @@ out in [aipass-bridge/handoff.html](aipass-bridge/handoff.html).
 | [aipass-bridge/chat.mjs](aipass-bridge/chat.mjs) | terminal chat client |
 | [aipass-bridge/vscode/](aipass-bridge/vscode/) | VS Code extension |
 | [aipass-bridge/rust/](aipass-bridge/rust/) | the same bridge in Rust, as a tray app |
-| [aipass-bridge/test/](aipass-bridge/test/) | 86 tests |
+| [aipass-bridge/test/](aipass-bridge/test/) | 90 tests |
 | [app/](app/) | the Next.js app this repo was scaffolded from — untouched |
 
 ---
@@ -541,7 +542,7 @@ out in [aipass-bridge/handoff.html](aipass-bridge/handoff.html).
 npm test
 ```
 
-86 tests, no dependencies, about two seconds.
+90 tests, no dependencies, about two seconds.
 [test/harness.mjs](aipass-bridge/test/harness.mjs) runs the real bridge as a
 subprocess alongside a scriptable stand-in for the extension, and
 [test/vscode-stub.mjs](aipass-bridge/test/vscode-stub.mjs) does the same for the

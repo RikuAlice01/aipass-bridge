@@ -9,6 +9,7 @@ import path from 'node:path';
 
 import {
   outbound, inbound, parse, prose, createTools, redact, splitInHalf, unifiedDiff, MIN_SPLIT,
+  CONVERSATION_GONE, sayResilient,
 } from '../agent/core.mjs';
 
 /* ------------------------------------------------------- an in-memory host */
@@ -183,6 +184,53 @@ test('redact drops only the lines that cannot be sent', () => {
   assert.match(out, /next build/, 'the rest of the file still gets through');
   assert.doesNotMatch(out, /node -e/);
   assert.doesNotMatch(out, /curl/);
+});
+
+test('a 403 about the conversation is told apart from a 403 about the payload', () => {
+  // Both arrive as "aipass returned 403"; only the body says which is which,
+  // and they want opposite responses -- rotate versus split.
+  const deleted = 'aipass returned 403 Forbidden [396 bytes] {server=cloudflare} — '
+    + '{"status":403,"detail":"Conversation has been deleted and is no longer accessible",'
+    + '"code":"CHAT_UNAUTHORIZED"}';
+  const filtered = 'aipass returned 403 Forbidden [4021 bytes] {server=Google Frontend} — '
+    + '<html><title>403 Forbidden</title></html>';
+
+  assert.ok(CONVERSATION_GONE.test(deleted), 'a deleted conversation must not be split');
+  assert.ok(!CONVERSATION_GONE.test(filtered), 'a filtered payload still needs splitting');
+
+  // Each marker has to stand on its own: a real body carries both, so testing
+  // them together would leave either one free to rot unnoticed.
+  for (const alone of [
+    '{"code":"CHAT_UNAUTHORIZED"}',
+    '{"detail":"Conversation has been deleted"}',
+    '{"detail":"this conversation is no longer accessible"}',
+    'Conversation not found',
+  ]) {
+    assert.ok(CONVERSATION_GONE.test(alone), `should match on its own: ${alone}`);
+  }
+});
+
+test('sayResilient splits a filtered payload but not a dead conversation', async () => {
+  // The end-to-end path cannot show this: the bridge rotates first and the
+  // error that finally comes back no longer mentions 403 at all. So drive the
+  // retry logic directly, which is the thing the guard lives in.
+  const attempts = (body) => {
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls++;
+      return { ok: false, status: 502, text: async () => body };
+    };
+    return sayResilient('x'.repeat(4000), { bridge: 'http://b', fetchImpl })
+      .then(() => calls, () => calls);
+  };
+
+  const filtered = await attempts('403 Forbidden <html>blocked</html>');
+  assert.ok(filtered > 1, `a filtered payload should be halved and retried, got ${filtered} call(s)`);
+
+  const deleted = await attempts(
+    '403 {"detail":"Conversation has been deleted and is no longer accessible","code":"CHAT_UNAUTHORIZED"}',
+  );
+  assert.equal(deleted, 1, 'a deleted conversation must not be retried at all');
 });
 
 test('splitInHalf halves by lines, and by characters when there is one line', () => {

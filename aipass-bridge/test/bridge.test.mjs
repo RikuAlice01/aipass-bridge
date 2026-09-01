@@ -123,6 +123,61 @@ test('picks the most recent conversation and rotates past one that is locked', a
   await ext.disconnect();
 });
 
+// The exact shape aipass sends when the conversation behind a request is gone.
+// Not a WAF block wearing the same status code: the body says which it is.
+const DELETED_403 =
+  'aipass returned 403 Forbidden [396 bytes] {server=cloudflare via=1.1 google ' +
+  'cf-ray=a3444f46ec07ee46-BKK} — {"error":"Chat service error: Forbidden",' +
+  '"type":"about:blank","title":"Unauthorized Access","status":403,' +
+  '"detail":"Conversation has been deleted and is no longer accessible",' +
+  '"code":"CHAT_UNAUTHORIZED"}';
+
+test('rotates past a conversation the server says was deleted', async () => {
+  const seen = [];
+  const ext = await new FakeExtension(bridge.base, {
+    onChat: async (job, e) => {
+      seen.push(job.conversationId);
+      // The newest one is gone; the next is fine.
+      if (job.conversationId === 'aaaa1111aaaa1111') return void e.error(DELETED_403);
+      await e.text('ok');
+      await e.done();
+    },
+  }).connect();
+
+  await fetch(`${bridge.base}/config`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ conversation: null }),
+  });
+
+  const body = await (await post({ messages: [{ role: 'user', content: 'hi' }] })).json();
+  assert.equal(body.choices?.[0]?.message?.content, 'ok',
+    `a deleted conversation should be rotated past, not surfaced: ${JSON.stringify(body).slice(0, 200)}`);
+  assert.deepEqual(seen, ['aaaa1111aaaa1111', 'bbbb2222bbbb2222']);
+  await ext.disconnect();
+});
+
+test('a 403 from an edge filter is still surfaced, not rotated away', async () => {
+  // Rotating on any 403 would hide the failure the whole splitting machinery
+  // exists to deal with.
+  const seen = [];
+  const ext = await new FakeExtension(bridge.base, {
+    onChat: async (job, e) => {
+      seen.push(job.conversationId);
+      e.error('aipass returned 403 Forbidden [4021 bytes] {server=Google Frontend} — <html>403 Forbidden</html>');
+    },
+  }).connect();
+
+  await fetch(`${bridge.base}/config`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ conversation: null }),
+  });
+
+  const res = await post({ messages: [{ role: 'user', content: 'hi' }] });
+  assert.equal(res.status, 502, 'the caller has to hear about a blocked payload');
+  assert.equal(seen.length, 1, 'and it must not burn the conversation list looking for a way through');
+  await ext.disconnect();
+});
+
 test('a job survives the extension disconnecting mid-stream', async () => {
   let resume;
   const ext = await new FakeExtension(bridge.base, {

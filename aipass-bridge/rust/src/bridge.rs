@@ -202,7 +202,16 @@ impl ChatHandle {
 /// delivered, and never when a conversation was pinned on purpose.
 fn rejected(message: &str) -> bool {
     let m = message.to_ascii_lowercase();
-    m.contains("conversation not found") || m.contains("returned 404") || m.contains("returned 409")
+    m.contains("conversation not found")
+        || m.contains("returned 404")
+        || m.contains("returned 409")
+        // 403 CHAT_UNAUTHORIZED / "conversation has been deleted" is the same
+        // situation as a 404: this one is gone, the next is fine. Matched on
+        // the body rather than the status, because a 403 from an edge filter
+        // is a different failure that rotating would only hide.
+        || m.contains("chat_unauthorized")
+        || m.contains("conversation has been deleted")
+        || m.contains("conversation is no longer")
 }
 
 pub fn start_chat(state: Shared, model: String, text: String) -> ChatHandle {

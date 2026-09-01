@@ -265,6 +265,18 @@ export const MIN_SPLIT = 300;
 // contain code-execution shapes — `node -e`, `curl`, `rm -rf`, `/bin/sh` — that
 // no amount of splitting gets past. Drop only the offending lines so the run
 // survives and the model still sees the rest of the file.
+// A 403 is two completely different failures wearing the same number.
+//
+// An edge filter refusing the payload is the one splitting was built for. But
+// aipass also answers 403 with CHAT_UNAUTHORIZED when the conversation itself
+// is gone, and no amount of halving revives a deleted conversation — it just
+// posts both halves to the same dead id, four levels deep, before giving up.
+//
+// The response body comes back inside the error message, so the two are told
+// apart by what it says rather than by the status code they share.
+export const CONVERSATION_GONE =
+  /CHAT_UNAUTHORIZED|conversation (?:has been deleted|not found|is no longer)/i;
+
 export const RISKY_LINE = /(node\s+-{1,2}e\b|--eval\b|\beval\(|child_process|exec(Sync)?\(|spawnSync?\(|\bcurl\b|\bwget\b|\b(ba)?sh\s+-c\b|rm\s+-rf|\/etc\/|\/bin\/(ba)?sh|\.\.\/\.\.\/)/i;
 
 export function redact(text) {
@@ -282,7 +294,8 @@ export async function sayResilient(text, opts, depth = 0) {
   try {
     return await say(text, opts);
   } catch (err) {
-    const blocked = /\b40[39]\b/.test(err.message);
+    // Splitting only makes sense for a filter refusing these bytes.
+    const blocked = /\b40[39]\b/.test(err.message) && !CONVERSATION_GONE.test(err.message);
     if (!blocked) throw err;
 
     const size = new TextEncoder().encode(text).length;
