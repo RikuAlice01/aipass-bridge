@@ -48,4 +48,5 @@ aipass*.md
 # staged into the VS Code extension by vscode/build.mjs; source of truth is
 # aipass-bridge/agent/core.mjs
 /aipass-bridge/vscode/agent/
+/aipass-bridge/vscode/LICENSE
 /aipass-bridge/vscode/*.vsix

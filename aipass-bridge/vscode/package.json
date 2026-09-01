@@ -113,6 +113,6 @@
     "stage": "node build.mjs",
     "check": "node build.mjs --check",
     "vscode:prepublish": "node build.mjs",
-    "package": "npx --yes @vscode/vsce package --allow-missing-repository"
+    "package": "npx --yes @vscode/vsce package"
   }
 }
