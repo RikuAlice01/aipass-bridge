@@ -1,0 +1,118 @@
+{
+  "name": "aipass-bridge-vscode",
+  "displayName": "aipass bridge",
+  "description": "Read and edit the workspace through de.aipass.net, via the local bridge.",
+  "version": "0.1.0",
+  "publisher": "aipass",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "AI",
+    "Chat"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "chatParticipants": [
+      {
+        "id": "aipass.agent",
+        "name": "aipass",
+        "fullName": "aipass",
+        "description": "Ask about this workspace, or ask for an edit",
+        "isSticky": true,
+        "commands": [
+          {
+            "name": "apply",
+            "description": "Run the task and write the changes straight to disk"
+          },
+          {
+            "name": "status",
+            "description": "Check the bridge and the browser tab"
+          },
+          {
+            "name": "models",
+            "description": "List the models the account can use"
+          }
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "aipass.showDiff",
+        "title": "aipass: Review pending change"
+      },
+      {
+        "command": "aipass.applyAll",
+        "title": "aipass: Apply pending changes"
+      },
+      {
+        "command": "aipass.discardAll",
+        "title": "aipass: Discard pending changes"
+      },
+      {
+        "command": "aipass.status",
+        "title": "aipass: Check bridge status"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "aipass.showDiff",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "aipass bridge",
+      "properties": {
+        "aipass.bridge": {
+          "type": "string",
+          "default": "http://127.0.0.1:8787",
+          "description": "Where the local bridge is listening. Start it with `npm run dev`."
+        },
+        "aipass.model": {
+          "type": "string",
+          "default": "",
+          "description": "Model id to use. Empty means whatever the bridge defaults to."
+        },
+        "aipass.maxSteps": {
+          "type": "number",
+          "default": 10,
+          "minimum": 1,
+          "maximum": 50,
+          "description": "How many read/edit rounds one request may take."
+        },
+        "aipass.maxResult": {
+          "type": "number",
+          "default": 3000,
+          "description": "Truncate each tool result to this many bytes before sending it upstream."
+        },
+        "aipass.allowRun": {
+          "type": "boolean",
+          "default": false,
+          "description": "Let the agent run shell commands in a terminal. Off by default."
+        },
+        "aipass.showModelMarkers": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show the raw NEED/EDIT/DONE markers the model writes, rather than only its prose."
+        }
+      }
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/RikuAlice01/aipass-bridge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/RikuAlice01/aipass-bridge/issues"
+  },
+  "scripts": {
+    "stage": "node build.mjs",
+    "check": "node build.mjs --check",
+    "vscode:prepublish": "node build.mjs",
+    "package": "npx --yes @vscode/vsce package --allow-missing-repository"
+  }
+}

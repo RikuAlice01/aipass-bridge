@@ -1,0 +1,5 @@
+# dev-only; agent/core.mjs is staged by build.mjs and must ship
+.vscode/**
+.gitignore
+build.mjs
+*.vsix
