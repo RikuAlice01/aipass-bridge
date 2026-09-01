@@ -50,3 +50,6 @@ aipass*.md
 /aipass-bridge/vscode/agent/
 /aipass-bridge/vscode/LICENSE
 /aipass-bridge/vscode/*.vsix
+
+# local working plan — deliberately not shared
+/PLAN.md
