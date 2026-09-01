@@ -75,7 +75,9 @@ impl Config {
         let env = |k: &str| std::env::var(k).ok().filter(|v| !v.is_empty());
         Config {
             host: env("AIPASS_HOST").unwrap_or_else(|| "127.0.0.1".into()),
-            port: env("AIPASS_PORT").and_then(|v| v.parse().ok()).unwrap_or(8787),
+            port: env("AIPASS_PORT")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(8787),
             models_fallback: env("AIPASS_MODELS")
                 .unwrap_or_else(|| "gemini-3.1-flash-lite,claude-sonnet-5@default".into())
                 .split(',')

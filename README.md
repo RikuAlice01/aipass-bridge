@@ -318,10 +318,14 @@ npm run bridge:build     # -> aipass-bridge/rust/target/release/aipass-bridge.ex
 npm run bridge:tray      # build and run it
 ```
 
-Double-click it and it runs in the tray. The icon *is* the status: **amber**
-when no browser tab is attached, **green** when ready, **blue** while a job is
-in flight. Its menu shows the conversation in use and offers **Copy bridge
-URL**, **Open de.aipass.net/chat** and **Quit**.
+Double-click it and it runs in the tray. Hover for status — **no browser tab
+attached**, **ready · n tabs**, or **n job(s) in flight** — and its menu shows
+the conversation in use and offers **Copy bridge URL**,
+**Open de.aipass.net/chat** and **Quit**.
+
+`icon.ico` at the repo root is the one icon for the project: compiled into the
+`.exe` as a Windows resource, and the source the extension's PNGs are generated
+from.
 
 It is a port, not a rewrite: same routes, same `AIPASS_*` variables, same
 behaviour, and no credential reaches it either. How that is kept honest —

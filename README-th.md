@@ -316,10 +316,12 @@ npm run bridge:build     # -> aipass-bridge/rust/target/release/aipass-bridge.ex
 npm run bridge:tray      # build แล้วรันเลย
 ```
 
-ดับเบิลคลิกแล้วมันไปอยู่ใน tray · **ตัวไอคอนคือสถานะ**: **เหลือง** เมื่อยังไม่มี
-แท็บ browser ต่ออยู่, **เขียว** เมื่อพร้อม, **น้ำเงิน** เมื่อมีงานกำลังวิ่ง ·
-เมนูบอกว่าใช้ conversation ไหน พร้อม **Copy bridge URL**,
-**Open de.aipass.net/chat** และ **Quit**
+ดับเบิลคลิกแล้วมันไปอยู่ใน tray · เอาเมาส์ชี้เพื่อดูสถานะ — **ยังไม่มีแท็บต่อ**,
+**พร้อม · n แท็บ** หรือ **มี n งานกำลังวิ่ง** · เมนูบอกว่าใช้ conversation ไหน
+พร้อม **Copy bridge URL**, **Open de.aipass.net/chat** และ **Quit**
+
+`icon.ico` ที่ root เป็นไอคอนตัวเดียวของทั้งโปรเจกต์: ถูกคอมไพล์ฝังเข้า `.exe`
+เป็น Windows resource และเป็นต้นทางที่ใช้สร้าง PNG ของ extension ด้วย
 
 เป็นการ port ไม่ใช่เขียนใหม่: route เดิม, ตัวแปร `AIPASS_*` เดิม, พฤติกรรมเดิม
 และไม่มี credential มาถึงมันเหมือนกัน · วิธีที่ยืนยันว่าเทียบเท่าจริง — **ไม่มี

@@ -13,8 +13,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-pub const LOADER_MODELS: &str =
-    "/loaders/list-models.data?_routes=routes%2Floaders%2Flist-models";
+pub const LOADER_MODELS: &str = "/loaders/list-models.data?_routes=routes%2Floaders%2Flist-models";
 pub const LOADER_CONVERSATIONS: &str =
     "/loaders/list-conversations.data?_routes=routes%2Floaders%2Flist-converstaions";
 

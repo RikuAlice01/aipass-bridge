@@ -48,7 +48,9 @@ fn walk(node: &Value, out: &mut Vec<Model>) {
                     let text = |k: &str| fields.get(k).and_then(Value::as_str).map(str::to_string);
                     out.push(Model {
                         id: id.to_string(),
-                        name: text("displayName").or_else(|| text("name")).unwrap_or_else(|| id.to_string()),
+                        name: text("displayName")
+                            .or_else(|| text("name"))
+                            .unwrap_or_else(|| id.to_string()),
                         provider: text("providerName").or_else(|| text("provider")),
                         free: fields.get("isFreeCredit") == Some(&Value::Bool(true)),
                         ready: fields.get("ready") != Some(&Value::Bool(false)),
@@ -57,7 +59,11 @@ fn walk(node: &Value, out: &mut Vec<Model>) {
                             .and_then(|c| c.get("supportedLevels"))
                             .and_then(Value::as_array)
                             .map(|levels| {
-                                levels.iter().filter_map(Value::as_str).map(str::to_string).collect()
+                                levels
+                                    .iter()
+                                    .filter_map(Value::as_str)
+                                    .map(str::to_string)
+                                    .collect()
                             }),
                         media: is_media(id),
                     });

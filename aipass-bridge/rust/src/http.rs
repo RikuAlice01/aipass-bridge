@@ -42,8 +42,8 @@ fn oai_error(status: StatusCode, message: &str, kind: &str) -> Response<Body> {
 /// An SSE response fed from a channel: the extension channel and streaming
 /// chat completions both use it.
 fn sse_response(rx: mpsc::UnboundedReceiver<String>, private_network: bool) -> Response<Body> {
-    let stream = UnboundedReceiverStream::new(rx)
-        .map(|s| Ok::<_, Infallible>(Frame::data(Bytes::from(s))));
+    let stream =
+        UnboundedReceiverStream::new(rx).map(|s| Ok::<_, Infallible>(Frame::data(Bytes::from(s))));
     let mut builder = Response::builder()
         .status(StatusCode::OK)
         .header("content-type", "text/event-stream; charset=utf-8")
@@ -80,7 +80,12 @@ fn now_secs() -> u64 {
 fn completion_id() -> String {
     format!(
         "chatcmpl-{}",
-        Uuid::new_v4().simple().to_string().chars().take(24).collect::<String>()
+        Uuid::new_v4()
+            .simple()
+            .to_string()
+            .chars()
+            .take(24)
+            .collect::<String>()
     )
 }
 
@@ -123,8 +128,14 @@ pub async fn route(state: Shared, req: Request<Incoming>) -> Result<Response<Bod
         (&Method::POST, "/conversations/new") => {
             let body = read_body(req).await.unwrap_or_default();
             let parsed: Value = serde_json::from_str(&body).unwrap_or(json!({}));
-            let model = parsed.get("model").and_then(Value::as_str).map(str::to_string);
-            let message = parsed.get("message").and_then(Value::as_str).map(str::to_string);
+            let model = parsed
+                .get("model")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            let message = parsed
+                .get("message")
+                .and_then(Value::as_str)
+                .map(str::to_string);
             match bridge::create_conversation(&state, model, message).await {
                 Ok(id) => json_response(StatusCode::OK, json!({ "id": id })),
                 Err(e) => oai_error(StatusCode::BAD_GATEWAY, &e, "upstream_error"),
@@ -220,7 +231,10 @@ pub async fn route(state: Shared, req: Request<Incoming>) -> Result<Response<Bod
 fn ext_events(state: Shared) -> Response<Body> {
     let (tx, rx) = mpsc::unbounded_channel();
     let id = state.add_client(tx.clone());
-    log(format!("extension connected ({} total)", state.client_count()));
+    log(format!(
+        "extension connected ({} total)",
+        state.client_count()
+    ));
     let _ = tx.send(crate::state::sse("ready", &json!({ "clientId": id })));
 
     // Warm the model list the way the JS bridge does, shortly after a tab
@@ -335,10 +349,18 @@ async fn ext_post(state: Shared, req: Request<Incoming>, kind: &str) -> Response
 
 async fn chat_completions(state: Shared, req: Request<Incoming>) -> Response<Body> {
     let Ok(body) = read_body(req).await else {
-        return oai_error(StatusCode::BAD_REQUEST, "body too large", "invalid_request_error");
+        return oai_error(
+            StatusCode::BAD_REQUEST,
+            "body too large",
+            "invalid_request_error",
+        );
     };
     let Ok(payload) = serde_json::from_str::<Value>(&body) else {
-        return oai_error(StatusCode::BAD_REQUEST, "invalid JSON body", "invalid_request_error");
+        return oai_error(
+            StatusCode::BAD_REQUEST,
+            "invalid JSON body",
+            "invalid_request_error",
+        );
     };
 
     let model = payload
@@ -350,14 +372,21 @@ async fn chat_completions(state: Shared, req: Request<Incoming>) -> Response<Bod
 
     let text = bridge::last_user_text(payload.get("messages"));
     if text.is_empty() {
-        return oai_error(StatusCode::BAD_REQUEST, "no user message", "invalid_request_error");
+        return oai_error(
+            StatusCode::BAD_REQUEST,
+            "no user message",
+            "invalid_request_error",
+        );
     }
 
     let id = completion_id();
     let created = now_secs();
     log(format!("chat -> {model} ({} bytes)", text.len()));
 
-    let streaming = payload.get("stream").and_then(Value::as_bool).unwrap_or(false);
+    let streaming = payload
+        .get("stream")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let visibility = state.config.tool_visibility.clone();
     let mut handle = bridge::start_chat(state.clone(), model.clone(), text.clone());
 
@@ -374,7 +403,10 @@ async fn chat_completions(state: Shared, req: Request<Incoming>) -> Response<Bod
                     })
                 )
             };
-            let _ = tx.send(emit(json!({ "role": "assistant", "content": "" }), Value::Null));
+            let _ = tx.send(emit(
+                json!({ "role": "assistant", "content": "" }),
+                Value::Null,
+            ));
 
             loop {
                 match handle.rx.recv().await {

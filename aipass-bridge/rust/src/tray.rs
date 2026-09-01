@@ -12,38 +12,24 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, PeekMessageW, TranslateMessage, MSG, PM_REMOVE,
 };
 
-/// Drawn rather than shipped as a file: one asset the .exe cannot lose, and it
-/// keeps the build to `cargo build` with nothing to copy alongside it.
+/// The project icon, compiled into the .exe by build.rs as ordinal 1 — the
+/// same resource Explorer and the taskbar show for the file itself.
 ///
-/// A rounded square that reads at 16px, tinted by state — the icon *is* the
-/// status readout, since that is all a tray icon is ever glanced at for.
-fn icon_rgba(r: u8, g: u8, b: u8) -> Icon {
-    const SIZE: u32 = 32;
-    let mut rgba = Vec::with_capacity((SIZE * SIZE * 4) as usize);
-    let centre = (SIZE as f32 - 1.0) / 2.0;
-
-    for y in 0..SIZE {
-        for x in 0..SIZE {
-            let dx = (x as f32 - centre).abs();
-            let dy = (y as f32 - centre).abs();
-            // Squircle: |dx|^4 + |dy|^4 <= radius^4 gives a rounded square
-            // that stays legible when Windows scales it down.
-            let d = dx.powi(4) + dy.powi(4);
-            let radius: f32 = 14.0;
-            let inside = d <= radius.powi(4);
-            let ring = d <= radius.powi(4) && d >= (radius - 3.0).powi(4);
-
-            if ring {
-                rgba.extend_from_slice(&[r, g, b, 255]);
-            } else if inside {
-                // Hollow centre so the tint reads as a ring, not a blob.
-                rgba.extend_from_slice(&[r, g, b, 70]);
-            } else {
-                rgba.extend_from_slice(&[0, 0, 0, 0]);
-            }
+/// The tray icon used to be drawn here and tinted by state, which meant the
+/// icon doubled as the status readout. It carries the project's own artwork
+/// now, so status lives in the tooltip and the first menu line instead.
+fn app_icon() -> Option<Icon> {
+    match Icon::from_resource(1, None) {
+        Ok(icon) => Some(icon),
+        Err(e) => {
+            // Silently falling back to the stock icon is how a broken build
+            // script goes unnoticed for months.
+            crate::bridge::log(format!(
+                "could not load the embedded icon ({e}); using the default"
+            ));
+            None
         }
     }
-    Icon::from_rgba(rgba, SIZE, SIZE).expect("icon dimensions are constant")
 }
 
 struct Items {
@@ -76,21 +62,14 @@ fn build_menu() -> (Menu, Items) {
     (menu, items)
 }
 
-/// Green once a tab is attached, amber while nothing is, blue while a job is
-/// in flight — so a glance at the taskbar answers "is it working".
-fn appearance(clients: usize, jobs: usize) -> ((u8, u8, u8), String) {
+/// One line that answers "is it working" without opening anything.
+fn status_line(clients: usize, jobs: usize) -> String {
     if clients == 0 {
-        ((0xC8, 0x7A, 0x1E), "no browser tab attached".into())
+        "no browser tab attached".into()
     } else if jobs > 0 {
-        (
-            (0x2F, 0x62, 0xF0),
-            format!("{jobs} job(s) in flight · {clients} tab(s)"),
-        )
+        format!("{jobs} job(s) in flight · {clients} tab(s)")
     } else {
-        (
-            (0x1F, 0x8A, 0x54),
-            format!("ready · {clients} tab(s) attached"),
-        )
+        format!("ready · {clients} tab(s) attached")
     }
 }
 
@@ -98,17 +77,20 @@ pub fn run(state: Shared, addr: SocketAddr) {
     let (menu, items) = build_menu();
     let url = format!("http://{addr}");
 
-    let tray: TrayIcon = match TrayIconBuilder::new()
+    let mut builder = TrayIconBuilder::new()
         .with_menu(Box::new(menu))
-        .with_tooltip(format!("aipass bridge · {url}"))
-        .with_icon(icon_rgba(0xC8, 0x7A, 0x1E))
-        .build()
-    {
+        .with_tooltip(format!("aipass bridge · {url}"));
+    if let Some(icon) = app_icon() {
+        builder = builder.with_icon(icon);
+    }
+    let tray: TrayIcon = match builder.build() {
         Ok(t) => t,
         Err(e) => {
             // No tray (a session with no shell, say) is not fatal: the server
             // is already running, so fall back to serving headlessly.
-            crate::bridge::log(format!("no system tray available ({e}); serving without one"));
+            crate::bridge::log(format!(
+                "no system tray available ({e}); serving without one"
+            ));
             loop {
                 std::thread::sleep(Duration::from_secs(3600));
             }
@@ -134,8 +116,7 @@ pub fn run(state: Shared, addr: SocketAddr) {
         let now = (state.client_count(), state.active_jobs());
         if now != last {
             last = now;
-            let ((r, g, b), label) = appearance(now.0, now.1);
-            let _ = tray.set_icon(Some(icon_rgba(r, g, b)));
+            let label = status_line(now.0, now.1);
             let _ = tray.set_tooltip(Some(format!("aipass bridge · {label}")));
             items.status.set_text(&label);
             items.conversation.set_text(format!(

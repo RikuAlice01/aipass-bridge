@@ -46,7 +46,10 @@ fn resolve(
     building.insert(idx);
     let out = match raw {
         Value::Array(items) => Value::Array(
-            items.iter().map(|e| resolve(flat, e, done, building)).collect(),
+            items
+                .iter()
+                .map(|e| resolve(flat, e, done, building))
+                .collect(),
         ),
         Value::Object(fields) => {
             let mut map = Map::new();
@@ -92,7 +95,12 @@ pub fn conversations(node: &Value) -> Vec<Value> {
     let mut out = Vec::new();
     collect_conversations(node, &mut out);
     out.sort_by(|a, b| {
-        let key = |v: &Value| v.get("updatedAt").and_then(Value::as_str).unwrap_or("").to_string();
+        let key = |v: &Value| {
+            v.get("updatedAt")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string()
+        };
         key(b).cmp(&key(a))
     });
     out

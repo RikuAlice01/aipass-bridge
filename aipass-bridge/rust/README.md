@@ -13,22 +13,22 @@ Double-click the `.exe` and it sits in the tray. Everything else — the CLIs,
 the VS Code extension, any OpenAI-compatible client — talks to it exactly as it
 talked to the Node bridge, on the same `:8787`.
 
-## The icon is the status readout
+## The icon
 
-A tray icon is only ever glanced at, so it answers one question by colour:
+`icon.ico` at the repo root is compiled into the executable by
+[build.rs](build.rs) as ordinal 1 — so Explorer, the taskbar and the tray all
+show the same image, and there is still no asset to ship beside the binary.
+The extension's PNGs are generated from that same file, so the project has one
+icon rather than three that drift.
 
-| | |
-|---|---|
-| **amber** | no browser tab attached — nothing will work yet |
-| **green** | ready, with *n* tabs attached |
-| **blue** | a job is in flight |
+Status lives in the tooltip and the first menu line: **no browser tab
+attached**, **ready · n tabs**, or **n job(s) in flight**. The menu also shows
+the conversation in use and offers **Copy bridge URL**,
+**Open de.aipass.net/chat** and **Quit**.
 
-The menu repeats it in words, shows which conversation is in use, and offers
-**Copy bridge URL**, **Open de.aipass.net/chat**, and **Quit**.
-
-The icon is drawn at startup rather than shipped as a file, so the `.exe` has
-nothing to lose track of and the build stays `cargo build` with nothing to copy
-beside it.
+> Earlier the tray icon was drawn at startup and tinted amber/green/blue, so
+> the icon itself was the status. Carrying the project's artwork costs that
+> at-a-glance signal; the words are still there, one hover away.
 
 ## It is a port, not a rewrite
 
