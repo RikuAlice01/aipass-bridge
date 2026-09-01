@@ -37,6 +37,21 @@ conversation.
 
 Tick **write changes straight to disk** to skip staging.
 
+### Agent or Ask
+
+| mode | |
+|---|---|
+| **Agent** | reads and edits files in the workspace — the full protocol |
+| **Ask** | the question goes straight to the model: no preamble, no directory listing, no tools |
+
+Agent mode costs about 1.4kB of file-editing protocol on the turn that opens a
+conversation. A question like *"what day is it"* does not want any of that, and
+the bytes are not free — a bigger payload is a bigger target for the upstream
+filter this project exists to stay under.
+
+Within one conversation the instructions go out **once**. The server keeps the
+history, so every later turn is just the question.
+
 The panel takes the editor's theme rather than a palette of its own — a
 light-blue card in someone's dark theme reads as a bug.
 

@@ -9,9 +9,16 @@
   const send = $('#send');
   const stop = $('#stop');
   const applyBox = $('#autoapply');
+  const applyWrap = $('#applywrap');
   const pill = $('#status');
+  const modeAgent = $('#mode-agent');
+  const modeAsk = $('#mode-ask');
 
   let busy = false;
+  // Agent reads and edits files; Ask goes straight to the model with no
+  // preamble and no tools, which is what a question like "what day is it"
+  // actually wants.
+  let mode = 'agent';
   let current = null;   // the agent turn being streamed into
 
   /* ----------------------------------------------------------- rendering */
@@ -170,10 +177,24 @@
 
   /* --------------------------------------------------------------- input */
 
+  function setMode(next) {
+    mode = next;
+    modeAgent.classList.toggle('on', next === 'agent');
+    modeAsk.classList.toggle('on', next === 'ask');
+    // Writing to disk is meaningless when nothing reads the disk.
+    applyWrap.hidden = next !== 'agent';
+    input.placeholder = next === 'agent'
+      ? 'Ask about this workspace, or ask for an edit…'
+      : 'Ask anything — no files are read';
+  }
+
+  modeAgent.addEventListener('click', () => setMode('agent'));
+  modeAsk.addEventListener('click', () => setMode('ask'));
+
   function submit() {
     const text = input.value.trim();
     if (!text || busy) return;
-    vscode.postMessage({ type: 'ask', text, apply: applyBox.checked });
+    vscode.postMessage({ type: 'ask', text, apply: applyBox.checked, mode });
     input.value = '';
     input.style.height = 'auto';
   }

@@ -290,3 +290,33 @@ label.apply {
   user-select: none;
 }
 label.apply input { margin: 0; }
+
+/* ------------------------------------------------------------------- modes */
+
+.modes {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--r-md);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, .25));
+}
+button.mode {
+  padding: 2px 9px;
+  border-radius: calc(var(--r-md) - 3px);
+  font-size: 10.5px;
+  background: transparent;
+  color: var(--vscode-foreground);
+  opacity: .6;
+}
+button.mode:hover:not(.on) { background: var(--vscode-toolbar-hoverBackground); opacity: .85; }
+button.mode.on {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  opacity: 1;
+}
+
+/* Hidden in Ask mode: writing to disk is meaningless when nothing reads it. */
+label.apply[hidden] { display: none; }
+
+.composer .foot .tip { white-space: nowrap; }

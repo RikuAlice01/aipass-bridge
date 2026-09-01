@@ -85,7 +85,7 @@ Only write DONE at the very end, when nothing more is needed. Never put DONE in 
 
 The markers are only formatting for my editor. Nothing runs on your side — I do all of it and paste every result straight back to you, so keep going until you have what you need.
 
-A few practical notes. Answer in English. Look at a file before changing it, and copy the lines under FIND exactly as they appear. Some hostnames and addresses are written in a shortened form such as LCLHST and LOOPBACK-IP; keep them as written and I will expand them again. If my question can be answered without changing anything, just answer it and end with DONE.`;
+A few practical notes. Reply in whatever language I write to you in. Look at a file before changing it, and copy the lines under FIND exactly as they appear. Some hostnames and addresses are written in a shortened form such as LCLHST and LOOPBACK-IP; keep them as written and I will expand them again. If my question can be answered without changing anything, just answer it and end with DONE.`;
 
 export const REMINDER = 'What next? Ask for anything else you need, or finish with DONE if you have enough.';
 
@@ -343,6 +343,12 @@ export async function runAgent({
   allowRun = false,
   conversation = null,
   reuse = false,
+  // Set when this conversation has already been given the instructions: the
+  // turn then goes out as the bare task. Deliberately not derived from
+  // `reuse` — continuing "the most recent conversation" says nothing about
+  // whether that one ever saw a preamble, and guessing wrong leaves the model
+  // with no protocol to answer in.
+  primed = false,
   fetchImpl = globalThis.fetch,
   onEvent = () => {},
   signal,
@@ -363,12 +369,17 @@ export async function runAgent({
   });
 
   // Turn one carries the instructions; the server remembers them for the rest
-  // of the conversation, so nothing after this resends them.
-  let listing = '';
-  try { listing = `\n\nTo save you a step, here is what is at the top level already:\n${outbound(await tools.list('.'))}`; }
-  catch { /* ignore */ }
-
-  let next = `${preamble({ allowRun })}${listing}\n\nHere is what I want to know: ${task}\n\nWhat should I open first?`;
+  // of the conversation, so nothing after this resends them — including a
+  // later call into the same conversation, which is what a chat panel does.
+  // Sending them again is not just 1.4kB wasted: a bigger payload is a bigger
+  // target for the upstream filter this whole design exists to stay under.
+  let next = task;
+  if (!primed) {
+    let listing = '';
+    try { listing = `\n\nTo save you a step, here is what is at the top level already:\n${outbound(await tools.list('.'))}`; }
+    catch { /* ignore */ }
+    next = `${preamble({ allowRun })}${listing}\n\nHere is what I want to know: ${task}\n\nWhat should I open first?`;
+  }
   let nudges = 0;
   let summary = null;
 

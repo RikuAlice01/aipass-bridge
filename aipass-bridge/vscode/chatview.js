@@ -71,9 +71,13 @@ class ChatViewProvider {
       <button id="stop" class="ghost" hidden>Stop</button>
     </div>
     <div class="foot">
-      <label class="apply"><input type="checkbox" id="autoapply"> write changes straight to disk</label>
+      <div class="modes" role="group" aria-label="Mode">
+        <button type="button" id="mode-agent" class="mode on" title="Reads and edits files in this workspace">Agent</button>
+        <button type="button" id="mode-ask" class="mode" title="Just asks the model — no files, no preamble">Ask</button>
+      </div>
+      <label class="apply" id="applywrap"><input type="checkbox" id="autoapply"> write straight to disk</label>
       <span class="spacer"></span>
-      <span>Enter to send · Shift+Enter for a new line</span>
+      <span class="tip">Enter to send</span>
     </div>
   </div>
 
@@ -85,7 +89,7 @@ class ChatViewProvider {
   async onMessage(msg) {
     switch (msg.type) {
       case 'ready':   return this.refreshStatus();
-      case 'ask':     return this.ask(msg.text, msg.apply === true);
+      case 'ask':     return this.ask(msg.text, msg.apply === true, msg.mode);
       case 'cancel':  return this.controller?.abort();
       case 'new':     return this.newChat();
       case 'apply':   return this.deps.applyStaged();
@@ -114,7 +118,34 @@ class ChatViewProvider {
     return health;
   }
 
-  async ask(prompt, applyStraightAway) {
+  /// Ask mode: the question goes straight to the model, with no preamble, no
+  /// directory listing and no tools. "What day is it" does not need 1.4kB of
+  /// file-editing protocol in front of it, and the bytes are not free — a
+  /// bigger payload is a bigger target for the upstream filter.
+  async askPlain(core, prompt, bridge, cfg) {
+    try {
+      await core.say(prompt, {
+        bridge,
+        model: String(cfg().get('model') || '') || null,
+        signal: this.controller.signal,
+        onEvent: (evt) => {
+          if (evt.type === 'delta') this.post({ type: 'assistant', text: evt.text });
+          else if (evt.type === 'reasoning') {
+            this.post({ type: 'step', text: evt.text.split('\n')[0].slice(0, 160) });
+          }
+        },
+      });
+      this.post({ type: 'assistant', text: '\n' });
+    } catch (err) {
+      const aborted = this.controller?.signal.aborted;
+      this.post({ type: 'notice', text: aborted ? 'Cancelled.' : String(err?.message ?? err) });
+    } finally {
+      this.controller = null;
+      this.post({ type: 'busy', value: false });
+    }
+  }
+
+  async ask(prompt, applyStraightAway, mode = 'agent') {
     const { deps } = this;
     const cfg = () => vscode.workspace.getConfiguration('aipass');
     const bridge = deps.bridgeUrl();
@@ -137,9 +168,13 @@ class ChatViewProvider {
       return this.post({ type: 'notice', text: `Cannot reach aipass: ${health.reason}.` });
     }
 
-    const { runAgent, prose } = await deps.loadCore();
+    const core = await deps.loadCore();
     this.controller = new AbortController();
     this.post({ type: 'busy', value: true });
+
+    if (mode === 'ask') return this.askPlain(core, prompt, bridge, cfg);
+
+    const { runAgent, prose } = core;
 
     // Model prose is buffered per step and flushed as prose(), so the panel
     // shows the answer rather than the NEED/EDIT protocol carrying it.
@@ -196,6 +231,9 @@ class ChatViewProvider {
         maxResult: Number(cfg().get('maxResult')) || 3000,
         allowRun: cfg().get('allowRun') === true,
         reuse: this.started,
+        // The server keeps the history, so the instructions go out once per
+        // conversation rather than once per turn.
+        primed: this.started,
         signal: this.controller.signal,
         onEvent,
       }));

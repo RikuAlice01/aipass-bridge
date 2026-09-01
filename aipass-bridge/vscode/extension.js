@@ -23,9 +23,14 @@ let corePromise = null;
 // import. Packaged, it sits beside us; in the repo it is one level up.
 function loadCore(context) {
   if (corePromise) return corePromise;
+  // Source first, staged copy second. Both exist in a checkout that has ever
+  // been packaged, and preferring the copy there means editing agent/core.mjs
+  // changes nothing until someone remembers to re-stage — which is exactly
+  // how a stale build artifact ends up shadowing the code under test. Inside
+  // a .vsix there is no `..`, so the copy is what gets loaded.
   const candidates = [
-    path.join(context.extensionPath, 'agent', 'core.mjs'),
     path.join(context.extensionPath, '..', 'agent', 'core.mjs'),
+    path.join(context.extensionPath, 'agent', 'core.mjs'),
   ];
   corePromise = (async () => {
     let lastErr;
@@ -256,6 +261,9 @@ function createHandler(context, pending, terminalRunner) {
         maxResult: Number(cfg.get('maxResult')) || 3000,
         allowRun: cfg.get('allowRun') === true,
         reuse,
+        // Same conversation as the previous turn, so it already has the
+        // instructions; resending them is pure payload.
+        primed: reuse,
         signal: controller.signal,
         onEvent,
       }));

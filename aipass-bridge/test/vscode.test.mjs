@@ -434,6 +434,95 @@ test('the panel says what is wrong rather than failing silently', async () => {
   assert.equal(view.last('status').ok, false);
 });
 
+/* --------------------------------------------------- what actually goes out */
+
+test('a primed conversation gets the bare task, not the preamble again', async (t) => {
+  const dir = tempDir({ 'a.txt': 'x' });
+  const handler = scripted(['DONE nothing to do']);
+  const ext = await new FakeExtension(bridge.base, { onChat: handler }).connect();
+  t.after(() => ext.disconnect());
+
+  const { panel } = activate({ root: dir });
+  const view = panel();
+
+  await view.send({ type: 'ask', text: 'first question' });
+  const opening = handler.sent.at(-1);
+  assert.match(opening, /NEED file/, 'the opening turn carries the protocol');
+
+  await view.send({ type: 'ask', text: 'second question' });
+  const followUp = handler.sent.at(-1);
+
+  assert.equal(followUp, 'second question', 'a later turn is just the question');
+  assert.doesNotMatch(followUp, /NEED file/, 'the server already has the instructions');
+  assert.ok(
+    Buffer.byteLength(followUp) < Buffer.byteLength(opening) / 10,
+    `a follow-up should not cost what the first turn did: ${Buffer.byteLength(opening)} -> ${Buffer.byteLength(followUp)}`,
+  );
+});
+
+test('the CLI still sends the preamble, because --reuse cannot know', async (t) => {
+  // Continuing "the most recent conversation" says nothing about whether that
+  // one ever saw a preamble, so runAgent must not infer primed from reuse.
+  const dir = tempDir({ 'a.txt': 'x' });
+  const handler = scripted(['DONE nothing to do']);
+  const ext = await new FakeExtension(bridge.base, { onChat: handler }).connect();
+  t.after(() => ext.disconnect());
+
+  const core = await import('../agent/core.mjs');
+  await core.runAgent({
+    task: 'anything',
+    root: dir,
+    bridge: bridge.base,
+    reuse: true,
+    host: {
+      readFile: async () => '',
+      exists: async () => true,
+      readdir: async () => [],
+    },
+  });
+  assert.match(handler.sent.at(-1), /NEED file/, 'reuse alone must not suppress the preamble');
+});
+
+test('Ask mode sends the question and nothing else', async (t) => {
+  const dir = tempDir({ 'a.txt': 'x' });
+  const handler = scripted(['Tuesday.']);
+  const ext = await new FakeExtension(bridge.base, { onChat: handler }).connect();
+  t.after(() => ext.disconnect());
+
+  const { panel } = activate({ root: dir });
+  const view = panel();
+  await view.send({ type: 'ask', text: 'วันนี้วันอะไร', mode: 'ask' });
+
+  assert.equal(handler.sent.at(-1), 'วันนี้วันอะไร', 'no preamble, no directory listing');
+  assert.match(view.of('assistant').map((m) => m.text).join(''), /Tuesday\./);
+
+  const busy = view.of('busy').map((m) => m.value);
+  assert.deepEqual([busy.at(0), busy.at(-1)], [true, false]);
+});
+
+test('Ask mode never touches the workspace', async (t) => {
+  const dir = tempDir({ 'a.txt': 'hello' });
+  // Even handed an edit, Ask mode has no tools to run it with.
+  const ext = await new FakeExtension(bridge.base, {
+    onChat: scripted(['EDIT a.txt\nFIND\nhello\nNEW\ngoodbye\nEND']),
+  }).connect();
+  t.after(() => ext.disconnect());
+
+  const { panel } = activate({ root: dir });
+  const view = panel();
+  await view.send({ type: 'ask', text: 'change it', mode: 'ask' });
+
+  assert.equal(view.last('staged'), undefined, 'nothing is staged');
+  assert.equal(fs.readFileSync(path.join(dir, 'a.txt'), 'utf8'), 'hello', 'nothing is written');
+});
+
+test('the preamble no longer forces English', async () => {
+  const core = await import('../agent/core.mjs');
+  const text = core.preamble({ allowRun: false });
+  assert.doesNotMatch(text, /Answer in English/, 'a Thai question was getting an English answer');
+  assert.match(text, /same language|whatever language/i, 'it should follow the asker instead');
+});
+
 /* ------------------------------------------------------------ packaged .vsix */
 
 // Inside a .vsix everything above the extension root is gone, so ../agent is

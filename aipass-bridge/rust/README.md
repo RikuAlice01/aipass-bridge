@@ -52,7 +52,7 @@ There is no second test suite. `test/harness.mjs` starts whichever bridge
 CLIs, and the VS Code extension — runs unchanged against this binary:
 
 ```bash
-npm test            # 76 against the Node bridge
+npm test            # 81 against the Node bridge
 npm run test:rust   # the same 76 against this one
 ```
 
