@@ -11,7 +11,9 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 import { startBridge, FakeExtension, scripted, tempDir } from './harness.mjs';
-import { createVscodeStub, createStream, createToken, createContext } from './vscode-stub.mjs';
+import {
+  createVscodeStub, createStream, createToken, createContext, createWebviewView,
+} from './vscode-stub.mjs';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const EXTENSION = path.join(HERE, '..', 'vscode', 'extension.js');
@@ -30,7 +32,13 @@ function loadExtension(stub, file = EXTENSION) {
   };
   try {
     const require = createRequire(import.meta.url);
-    delete require.cache[require.resolve(file)];
+    // Every module under the extension captures `vscode` at require time, so
+    // dropping only the entry point leaves the rest bound to the first stub
+    // they ever saw -- and silently pointed at an earlier test's workspace.
+    const root = path.dirname(file);
+    for (const cached of Object.keys(require.cache)) {
+      if (cached.startsWith(root + path.sep)) delete require.cache[cached];
+    }
     return require(file);
   } finally {
     Module._load = original;
@@ -50,6 +58,16 @@ function activate({ root, config } = {}) {
   return {
     recorded,
     context,
+
+    /** Resolve the chat panel and hand back the stubbed view driving it. */
+    panel() {
+      const entry = recorded.webviewProviders.get('aipass.chat');
+      assert.ok(entry, 'the chat panel provider should be registered on activate');
+      const view = createWebviewView();
+      entry.provider.resolveWebviewView(view);
+      return view;
+    },
+
     async ask(prompt, { command, history = [] } = {}) {
       const stream = createStream();
       const token = createToken();
@@ -274,6 +292,148 @@ test('/status reports the bridge and the attached tab', async (t) => {
   assert.match(stream.text(), /browser tabs attached \| 1/);
 });
 
+/* ------------------------------------------------------------- chat panel */
+
+test('the chat panel is registered and keeps its thread when hidden', () => {
+  const { recorded } = activate({ root: tempDir({ 'a.txt': 'x' }) });
+  const entry = recorded.webviewProviders.get('aipass.chat');
+
+  assert.ok(entry, 'aipass.chat should be registered');
+  assert.equal(entry.options?.webviewOptions?.retainContextWhenHidden, true,
+    'a conversation must survive switching away from the panel');
+});
+
+test('the panel id and container in the manifest match what is registered', () => {
+  const require = createRequire(import.meta.url);
+  const manifest = require(path.join(HERE, '..', 'vscode', 'package.json'));
+  const { recorded } = activate({ root: tempDir({ 'a.txt': 'x' }) });
+
+  const view = manifest.contributes.views.aipass[0];
+  assert.equal(view.type, 'webview', 'VS Code needs to be told this view is a webview');
+  assert.ok(recorded.webviewProviders.has(view.id), `${view.id} is declared but never registered`);
+
+  // The activity-bar icon has to exist, or the container renders blank.
+  const icon = manifest.contributes.viewsContainers.activitybar[0].icon;
+  assert.ok(fs.existsSync(path.join(HERE, '..', 'vscode', icon)), `${icon} is missing`);
+});
+
+test('the panel html locks itself down and loads its own assets', () => {
+  const { panel } = activate({ root: tempDir({ 'a.txt': 'x' }) });
+  const { webview } = panel();
+
+  assert.equal(webview.options.enableScripts, true);
+  assert.match(webview.html, /Content-Security-Policy/);
+  assert.match(webview.html, /default-src 'none'/, 'a webview that can reach the network is a hole here');
+
+  const nonce = /nonce-([A-Za-z0-9]+)/.exec(webview.html)?.[1];
+  assert.ok(nonce && nonce.length >= 16, 'scripts must be nonce-gated');
+  assert.match(webview.html, new RegExp(`<script nonce="${nonce}"`), 'the tag and the policy must agree');
+
+  assert.match(webview.html, /chat\.css/);
+  assert.match(webview.html, /chat\.js/);
+});
+
+test('asking in the panel answers and reports what it read', async (t) => {
+  const dir = tempDir({ 'README.md': 'a starter project\n' });
+  const ext = await new FakeExtension(bridge.base, {
+    onChat: scripted(['NEED file README.md', 'DONE It is a starter project.']),
+  }).connect();
+  t.after(() => ext.disconnect());
+
+  const { panel } = activate({ root: dir });
+  const view = panel();
+  await view.send({ type: 'ask', text: 'what is this project?' });
+
+  assert.equal(view.last('user').text, 'what is this project?', 'the question is echoed back');
+  assert.match(view.of('assistant').map((m) => m.text).join(''), /It is a starter project\./);
+  assert.ok(view.of('step').some((m) => /read README\.md/.test(m.text)), 'the read shows as a step');
+
+  const busy = view.of('busy').map((m) => m.value);
+  assert.deepEqual([busy.at(0), busy.at(-1)], [true, false], 'the composer unlocks when the turn ends');
+});
+
+test('the panel stages an edit and applies it only when asked', async (t) => {
+  const dir = tempDir({ 'a.txt': 'hello' });
+  const ext = await new FakeExtension(bridge.base, {
+    onChat: scripted(['EDIT a.txt\nFIND\nhello\nNEW\ngoodbye\nEND', 'DONE renamed it']),
+  }).connect();
+  t.after(() => ext.disconnect());
+
+  const { panel } = activate({ root: dir });
+  const view = panel();
+  await view.send({ type: 'ask', text: 'say goodbye instead' });
+
+  const staged = view.last('staged');
+  assert.ok(staged, `the panel should offer the edit for review; it posted ${JSON.stringify(view.posted)}`);
+  assert.deepEqual(staged.files.map((f) => f.rel), ['a.txt']);
+  assert.equal(fs.readFileSync(path.join(dir, 'a.txt'), 'utf8'), 'hello', 'nothing written yet');
+
+  await view.send({ type: 'apply' });
+  assert.equal(fs.readFileSync(path.join(dir, 'a.txt'), 'utf8'), 'goodbye');
+});
+
+test('the panel can discard instead', async (t) => {
+  const dir = tempDir({ 'a.txt': 'hello' });
+  const ext = await new FakeExtension(bridge.base, {
+    onChat: scripted(['EDIT a.txt\nFIND\nhello\nNEW\ngoodbye\nEND', 'DONE done']),
+  }).connect();
+  t.after(() => ext.disconnect());
+
+  const { panel } = activate({ root: dir });
+  const view = panel();
+  await view.send({ type: 'ask', text: 'change it' });
+  await view.send({ type: 'discard' });
+
+  assert.equal(fs.readFileSync(path.join(dir, 'a.txt'), 'utf8'), 'hello');
+});
+
+test('the write-straight-to-disk box skips staging', async (t) => {
+  const dir = tempDir({ 'a.txt': 'hello' });
+  const ext = await new FakeExtension(bridge.base, {
+    onChat: scripted(['EDIT a.txt\nFIND\nhello\nNEW\ngoodbye\nEND', 'DONE done']),
+  }).connect();
+  t.after(() => ext.disconnect());
+
+  const { panel } = activate({ root: dir });
+  const view = panel();
+  await view.send({ type: 'ask', text: 'change it', apply: true });
+
+  assert.equal(view.last('staged'), undefined, 'nothing to review when it writes directly');
+  assert.equal(fs.readFileSync(path.join(dir, 'a.txt'), 'utf8'), 'goodbye');
+});
+
+test('the panel keeps one conversation, and New chat opens the next', async (t) => {
+  const dir = tempDir({ 'a.txt': 'x' });
+  const ext = await new FakeExtension(bridge.base, { onChat: scripted(['DONE nothing to do']) }).connect();
+  t.after(() => ext.disconnect());
+
+  const { panel } = activate({ root: dir });
+  const view = panel();
+
+  await view.send({ type: 'ask', text: 'first' });
+  assert.equal(ext.created.length, 1, 'the first turn opens a conversation');
+  const opened = ext.chats.at(-1).conversationId;
+
+  await view.send({ type: 'ask', text: 'follow-up' });
+  assert.equal(ext.created.length, 1, 'a follow-up must not open a second one');
+  assert.equal(ext.chats.at(-1).conversationId, opened);
+
+  await view.send({ type: 'new' });
+  assert.ok(view.of('cleared').length > 0, 'the thread is emptied');
+  await view.send({ type: 'ask', text: 'after new chat' });
+  assert.equal(ext.created.length, 2, 'New chat must open a fresh conversation');
+});
+
+test('the panel says what is wrong rather than failing silently', async () => {
+  // No FakeExtension attached, so the bridge reports zero tabs.
+  const { panel } = activate({ root: tempDir({ 'a.txt': 'x' }) });
+  const view = panel();
+  await view.send({ type: 'ask', text: 'anything' });
+
+  assert.match(view.last('notice').text, /not attached/);
+  assert.equal(view.last('status').ok, false);
+});
+
 /* ------------------------------------------------------------ packaged .vsix */
 
 // Inside a .vsix everything above the extension root is gone, so ../agent is
@@ -282,8 +442,18 @@ test('/status reports the bridge and the attached tab', async (t) => {
 // the fallback in loadCore does what it says.
 test('the packaged layout loads core.mjs from the staged copy', async (t) => {
   const staged = tempDir({});
+  const src = path.join(HERE, '..', 'vscode');
   fs.mkdirSync(path.join(staged, 'agent'), { recursive: true });
-  fs.copyFileSync(path.join(HERE, '..', 'vscode', 'extension.js'), path.join(staged, 'extension.js'));
+  fs.mkdirSync(path.join(staged, 'media'), { recursive: true });
+
+  // Everything the extension requires at runtime has to be inside the .vsix.
+  // Listing them here is what catches a new file that packaging forgot.
+  for (const file of ['extension.js', 'chatview.js', 'package.json']) {
+    fs.copyFileSync(path.join(src, file), path.join(staged, file));
+  }
+  for (const asset of fs.readdirSync(path.join(src, 'media'))) {
+    fs.copyFileSync(path.join(src, 'media', asset), path.join(staged, 'media', asset));
+  }
   fs.copyFileSync(path.join(HERE, '..', 'agent', 'core.mjs'), path.join(staged, 'agent', 'core.mjs'));
 
   assert.ok(

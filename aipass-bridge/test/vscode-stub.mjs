@@ -19,6 +19,10 @@ class Uri {
     this.path = uriPath;
   }
   static file(p) { return new Uri('file', toUriPath(path.resolve(p))); }
+  // chatview.js builds media/ paths with this.
+  static joinPath(base, ...parts) {
+    return new Uri(base.scheme, [base.path.replace(/\/+$/, ''), ...parts].join('/'));
+  }
   static from({ scheme, path: p }) { return new Uri(scheme, p); }
   get fsPath() { return fromUriPath(this.path); }
   with({ scheme }) { return new Uri(scheme ?? this.scheme, this.path); }
@@ -51,6 +55,7 @@ class WorkspaceEdit {
 export function createVscodeStub({ root, config = {} } = {}) {
   const recorded = {
     participants: [],
+    webviewProviders: new Map(),
     commands: new Map(),
     providers: new Map(),
     info: [],
@@ -139,6 +144,10 @@ export function createVscodeStub({ root, config = {} } = {}) {
     },
 
     window: {
+      registerWebviewViewProvider(id, provider, options) {
+        recorded.webviewProviders.set(id, { provider, options });
+        return { dispose() {} };
+      },
       showInformationMessage(m) { recorded.info.push(m); },
       showWarningMessage(m) { recorded.warn.push(m); },
       showErrorMessage(m) { recorded.error.push(m); },
@@ -178,4 +187,33 @@ export function createToken() {
 
 export function createContext(extensionPath) {
   return { extensionPath, subscriptions: [], extensionUri: Uri.file(extensionPath) };
+}
+
+// What VS Code hands a WebviewViewProvider. Records what the extension posts
+// out, and `send` plays a message back in as if the panel's script sent it.
+export function createWebviewView() {
+  const posted = [];
+  let onMessage = null;
+  let onDispose = null;
+
+  const view = {
+    posted,
+    webview: {
+      options: {},
+      html: '',
+      cspSource: 'vscode-webview://unit-test',
+      asWebviewUri: (uri) => `vscode-webview:/${uri.path}`,
+      postMessage(message) { posted.push(message); return Promise.resolve(true); },
+      onDidReceiveMessage(fn) { onMessage = fn; return { dispose() {} }; },
+    },
+    onDidDispose(fn) { onDispose = fn; return { dispose() {} }; },
+
+    /** Play a message in from the panel and wait for the handler to settle. */
+    send: (message) => Promise.resolve(onMessage?.(message)),
+    dispose: () => onDispose?.(),
+    /** Every message of one type, in order. */
+    of: (type) => posted.filter((m) => m.type === type),
+    last: (type) => posted.filter((m) => m.type === type).at(-1),
+  };
+  return view;
 }

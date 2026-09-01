@@ -27,7 +27,20 @@ still required; this extension only replaces the terminal.
 
 Check all three with `@aipass /status`.
 
-## Use it
+## The panel
+
+Click the aipass icon in the activity bar. Type a question, press Enter —
+Shift+Enter for a new line. Tool activity collapses into a **steps** block so a
+long run does not bury the answer it produced, edits arrive as a staged list
+with **Review** / **Apply** / **Discard**, and **New chat** starts a fresh
+conversation.
+
+Tick **write changes straight to disk** to skip staging.
+
+The panel takes the editor's theme rather than a palette of its own — a
+light-blue card in someone's dark theme reads as a bug.
+
+## Or the chat participant
 
 ```
 @aipass what does the bridge do when the extension disconnects mid-stream?
@@ -72,6 +85,17 @@ conversation history. So:
   history — including a refusal, which the model then repeats.
 - The instructions go out once, as the first message. Later turns carry only
   tool results.
+
+## The icon
+
+`icon.ico` at the repo root is the project's icon; `icon.png` here is a 128px
+render of it, because VS Code's `icon` field wants a PNG and the source is only
+32×32. `vsce` packages a `.ico` without complaining, which is not the same as
+VS Code drawing it well.
+
+The activity-bar glyph is separate — [media/aipass.svg](media/aipass.svg), a
+monochrome speech bubble drawn with `currentColor`, because VS Code masks
+container icons to a single colour and the pixel-art face would not survive it.
 
 ## Packaging
 

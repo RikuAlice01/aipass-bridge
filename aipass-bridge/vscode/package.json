@@ -5,6 +5,7 @@
   "version": "0.1.0",
   "publisher": "aipass",
   "license": "MIT",
+  "icon": "icon.png",
   "engines": {
     "vscode": "^1.95.0"
   },
@@ -13,8 +14,28 @@
     "Chat"
   ],
   "main": "./extension.js",
-  "activationEvents": [],
+  "activationEvents": [
+    "onView:aipass.chat"
+  ],
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "aipass",
+          "title": "aipass",
+          "icon": "media/aipass.svg"
+        }
+      ]
+    },
+    "views": {
+      "aipass": [
+        {
+          "id": "aipass.chat",
+          "name": "Chat",
+          "type": "webview"
+        }
+      ]
+    },
     "chatParticipants": [
       {
         "id": "aipass.agent",
@@ -39,6 +60,10 @@
       }
     ],
     "commands": [
+      {
+        "command": "aipass.openChat",
+        "title": "aipass: Open chat"
+      },
       {
         "command": "aipass.showDiff",
         "title": "aipass: Review pending change"

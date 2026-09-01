@@ -11,6 +11,7 @@
 const vscode = require('vscode');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
+const { ChatViewProvider } = require('./chatview');
 
 const PENDING_SCHEME = 'aipass-pending';
 
@@ -346,14 +347,42 @@ function activate(context) {
     return terminal;
   };
 
+  const terminalRunner = createTerminalRunner(getTerminal);
+
+  // The panel is the front door. The chat participant stays registered beside
+  // it: it costs one line, some people live in the VS Code chat view, and it
+  // is what the test suite drives.
+  const chat = new ChatViewProvider({
+    extensionUri: context.extensionUri,
+    loadCore: () => loadCore(context),
+    createHost,
+    terminalRunner,
+    probe,
+    bridgeUrl: () =>
+      String(vscode.workspace.getConfiguration('aipass').get('bridge')).replace(/\/+$/, ''),
+    stage: (abs, text) => pending.set(abs, text),
+    applyStaged: () => applyPending(pending),
+    discardStaged: () => pending.clear(),
+  });
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider('aipass.chat', chat, {
+      // A conversation the user scrolled back through should still be there
+      // when they switch to the terminal and back.
+      webviewOptions: { retainContextWhenHidden: true },
+    }),
+  );
+
   const participant = vscode.chat.createChatParticipant(
     'aipass.agent',
-    createHandler(context, pending, createTerminalRunner(getTerminal)),
+    createHandler(context, pending, terminalRunner),
   );
   participant.iconPath = new vscode.ThemeIcon('globe');
   context.subscriptions.push(participant);
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('aipass.openChat', () =>
+      vscode.commands.executeCommand('aipass.chat.focus')),
+
     vscode.commands.registerCommand('aipass.showDiff', async (abs) => {
       const folder = vscode.workspace.workspaceFolders?.[0];
       const rel = folder ? path.relative(folder.uri.fsPath, abs).split(path.sep).join('/') : abs;
