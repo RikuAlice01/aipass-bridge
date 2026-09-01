@@ -362,6 +362,9 @@ function activate(context) {
   // is what the test suite drives.
   const chat = new ChatViewProvider({
     extensionUri: context.extensionUri,
+    // Workspace-scoped: the conversation is about this project, so it should
+    // not follow the user into an unrelated folder.
+    state: context.workspaceState,
     loadCore: () => loadCore(context),
     createHost,
     terminalRunner,

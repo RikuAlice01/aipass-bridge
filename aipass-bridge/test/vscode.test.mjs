@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 
 import { startBridge, FakeExtension, scripted, tempDir } from './harness.mjs';
 import {
-  createVscodeStub, createStream, createToken, createContext, createWebviewView,
+  createVscodeStub, createStream, createToken, createContext, createWebviewView, createMemento,
 } from './vscode-stub.mjs';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
@@ -46,10 +46,12 @@ function loadExtension(stub, file = EXTENSION) {
 }
 
 // Stand up the extension and hand back everything a test needs to poke at it.
-function activate({ root, config } = {}) {
+function activate({ root, config, state } = {}) {
   const { vscode, recorded } = createVscodeStub({ root, config: { bridge: bridge.base, ...config } });
   const ext = loadExtension(vscode);
-  const context = createContext(path.join(HERE, '..', 'vscode'));
+  // Passing the same memento to two activate() calls is what a reload looks
+  // like: new provider, new webview, the workspaceState that was left behind.
+  const context = createContext(path.join(HERE, '..', 'vscode'), { workspaceState: state });
   ext.activate(context);
 
   const participant = recorded.participants[0];
@@ -597,6 +599,121 @@ test('a second Ask turn does not open another conversation', async (t) => {
   await view.send({ type: 'ask', text: 'second', mode: 'ask' });
 
   assert.equal(ext.created.length, 1, 'one conversation for the session');
+});
+
+/* --------------------------------------------------------- session on disk */
+
+test('the thread and the conversation survive a reload', async (t) => {
+  const dir = tempDir({ 'a.txt': 'x' });
+  const ext = await new FakeExtension(bridge.base, {
+    onChat: scripted(['DONE it is a starter project']),
+  }).connect();
+  t.after(() => ext.disconnect());
+
+  // One workspaceState carried across both activations, the way VS Code does.
+  const state = createMemento();
+
+  const first = activate({ root: dir, state });
+  const a = first.panel();
+  await a.send({ type: 'ask', text: 'what is this?' });
+  const opened = ext.chats.at(-1).conversationId;
+
+  const saved = state.get('aipass.session');
+  assert.ok(saved, 'the session should be written to workspaceState');
+  assert.equal(saved.conversationId, opened, 'so a reload can find the conversation again');
+  assert.deepEqual(saved.messages.map((m) => m.role), ['user', 'agent']);
+
+  // Reload: a fresh provider, same stored state, a brand new webview.
+  const second = activate({ root: dir, state });
+  const b = second.panel();
+  await b.send({ type: 'ready' });
+
+  const restored = b.last('restore');
+  assert.ok(restored, 'the panel should replay what it had');
+  assert.equal(restored.messages[0].text, 'what is this?');
+  assert.match(restored.messages[1].text, /starter project/);
+});
+
+test('the first turn after a reload continues the same conversation', async (t) => {
+  const dir = tempDir({ 'a.txt': 'x' });
+  const ext = await new FakeExtension(bridge.base, { onChat: scripted(['DONE ok']) }).connect();
+  t.after(() => ext.disconnect());
+
+  const state = createMemento();
+  const first = activate({ root: dir, state });
+  await first.panel().send({ type: 'ask', text: 'first' });
+  const opened = ext.chats.at(-1).conversationId;
+  assert.equal(ext.created.length, 1);
+
+  // Something else moves the bridge off that conversation in the meantime.
+  await fetch(`${bridge.base}/config`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ conversation: 'bbbb2222bbbb2222' }),
+  });
+
+  const second = activate({ root: dir, state });
+  await second.panel().send({ type: 'ask', text: 'after the reload' });
+
+  assert.equal(ext.created.length, 1, 'a reload must not open a second conversation');
+  assert.equal(ext.chats.at(-1).conversationId, opened,
+    'the panel has to point the bridge back at the one it was using');
+});
+
+test('a restored Ask conversation still gets the instructions from Agent', async (t) => {
+  const dir = tempDir({ 'a.txt': 'x' });
+  const handler = scripted(['fine', 'DONE nothing to do']);
+  const ext = await new FakeExtension(bridge.base, { conversations: [], onChat: handler }).connect();
+  t.after(() => ext.disconnect());
+
+  await fetch(`${bridge.base}/config`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ conversation: null }),
+  });
+
+  const state = createMemento();
+  await activate({ root: dir, state }).panel().send({ type: 'ask', text: 'hi', mode: 'ask' });
+  assert.equal(state.get('aipass.session').primed, false, 'Ask never sends the preamble');
+
+  // Reload, then switch to Agent: the conversation exists but has no protocol.
+  await activate({ root: dir, state }).panel().send({ type: 'ask', text: 'read the project' });
+  assert.match(handler.sent.at(-1), /NEED file/,
+    'priming has to survive the reload as false, or Agent skips a preamble the server lacks');
+});
+
+test('New chat clears what was stored', async (t) => {
+  const dir = tempDir({ 'a.txt': 'x' });
+  const ext = await new FakeExtension(bridge.base, { onChat: scripted(['DONE ok']) }).connect();
+  t.after(() => ext.disconnect());
+
+  const state = createMemento();
+  const { panel } = activate({ root: dir, state });
+  const view = panel();
+  await view.send({ type: 'ask', text: 'something' });
+  assert.ok(state.get('aipass.session').messages.length > 0);
+
+  await view.send({ type: 'new' });
+  const cleared = state.get('aipass.session');
+  assert.deepEqual(cleared.messages, [], 'the thread goes');
+  assert.equal(cleared.conversationId, null, 'and so does the conversation it was tied to');
+});
+
+test('a very long thread is trimmed rather than growing without limit', async (t) => {
+  const dir = tempDir({ 'a.txt': 'x' });
+  const ext = await new FakeExtension(bridge.base, { onChat: scripted(['DONE ok']) }).connect();
+  t.after(() => ext.disconnect());
+
+  const state = createMemento();
+  const { panel } = activate({ root: dir, state });
+  const view = panel();
+
+  // workspaceState is not a database; one enormous turn must not park itself
+  // there forever.
+  for (let i = 0; i < 4; i++) await view.send({ type: 'ask', text: 'x'.repeat(40 * 1024) });
+
+  const stored = state.get('aipass.session');
+  const chars = stored.messages.reduce((n, m) => n + m.text.length, 0);
+  assert.ok(chars <= 96 * 1024, `stored thread should stay under the cap, got ${chars}`);
+  assert.ok(stored.messages.length > 0, 'but not empty itself out');
 });
 
 /* ------------------------------------------------------------ model picker */

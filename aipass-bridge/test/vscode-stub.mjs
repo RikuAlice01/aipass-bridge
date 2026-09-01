@@ -197,8 +197,29 @@ export function createToken() {
   };
 }
 
-export function createContext(extensionPath) {
-  return { extensionPath, subscriptions: [], extensionUri: Uri.file(extensionPath) };
+/** A Memento, backed by a plain object a test can inspect or pre-seed. */
+export function createMemento(initial = {}) {
+  const store = { ...initial };
+  return {
+    store,
+    get: (key, fallback) => (key in store ? store[key] : fallback),
+    async update(key, value) {
+      if (value === undefined) delete store[key];
+      else store[key] = value;
+    },
+    keys: () => Object.keys(store),
+  };
+}
+
+export function createContext(extensionPath, { workspaceState } = {}) {
+  workspaceState = workspaceState ?? createMemento();
+  return {
+    extensionPath,
+    subscriptions: [],
+    extensionUri: Uri.file(extensionPath),
+    workspaceState,
+    globalState: createMemento(),
+  };
 }
 
 // What VS Code hands a WebviewViewProvider. Records what the extension posts

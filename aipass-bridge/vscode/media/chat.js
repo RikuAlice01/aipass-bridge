@@ -162,6 +162,18 @@
         renderModels(data);
         break;
 
+      case 'restore':
+        thread.innerHTML = '';
+        for (const m of data.messages) {
+          if (m.role === 'notice') addNotice(m.text);
+          else addMessage(m.role === 'user' ? 'user' : 'agent', m.text);
+        }
+        // Nothing is streaming into this, so the next answer starts its own
+        // message rather than appending to the last restored one.
+        current = null;
+        thread.scrollTop = thread.scrollHeight;
+        break;
+
       case 'cleared':
         thread.innerHTML = '';
         thread.append(emptyState());

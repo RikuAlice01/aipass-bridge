@@ -12,20 +12,67 @@ function nonce() {
   return Array.from({ length: 32 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
+// One key in workspaceState. The conversation is about this project, so it
+// belongs to this workspace rather than following the user to other folders.
+const SESSION_KEY = 'aipass.session';
+
+// workspaceState is meant for small values, and a long thread is not small.
+// Old turns are dropped rather than letting it grow without a ceiling.
+const MAX_MESSAGES = 200;
+const MAX_CHARS = 96 * 1024;
+
 class ChatViewProvider {
   constructor(deps) {
     this.deps = deps;
     this.view = null;
     this.controller = null;
+
+    // What survives a reload: which conversation this panel is talking to,
+    // whether that conversation has the agent instructions, and the thread as
+    // it was left. Not a credential — that lives in the browser and stays
+    // there; this is only the conversation.
+    const saved = deps.state?.get(SESSION_KEY) ?? {};
+    this.conversationId = saved.conversationId ?? null;
+    this.messages = Array.isArray(saved.messages) ? saved.messages : [];
     // The server owns conversation history, so the panel holds one
     // conversation: the first turn opens it, later turns continue it, and
     // "New chat" drops it so the next turn opens a fresh one.
-    this.started = false;
+    this.started = Boolean(saved.conversationId);
     // Whether that conversation has been given the agent instructions. Kept
     // apart from `started` because Ask mode opens a conversation without ever
     // sending them — treating the two as one would leave a later Agent turn
     // skipping a preamble the server never received.
-    this.primed = false;
+    this.primed = saved.primed === true;
+    // A restored conversation lives on the bridge, not here, so the first turn
+    // after a reload has to point the bridge back at it.
+    this.needsResume = this.started;
+  }
+
+  /** Remember a rendered message, and persist the session. */
+  remember(role, text) {
+    this.messages.push({ role, text });
+    while (
+      this.messages.length > MAX_MESSAGES ||
+      this.messages.reduce((n, m) => n + m.text.length, 0) > MAX_CHARS
+    ) {
+      this.messages.shift();
+    }
+    this.save();
+  }
+
+  save() {
+    return this.deps.state?.update(SESSION_KEY, {
+      conversationId: this.conversationId,
+      primed: this.primed,
+      messages: this.messages,
+    });
+  }
+
+  /** Point the bridge back at the conversation this panel was using. */
+  async resume(core, bridge, model) {
+    if (!this.needsResume || !this.conversationId) return;
+    this.needsResume = false;
+    await core.prepareConversation({ bridge, model, conversation: this.conversationId });
   }
 
   post(message) {
@@ -96,7 +143,7 @@ class ChatViewProvider {
 
   async onMessage(msg) {
     switch (msg.type) {
-      case 'ready':   return this.refresh();
+      case 'ready':   return this.ready();
       case 'model':   return this.setModel(msg.id);
       case 'ask':     return this.ask(msg.text, msg.apply === true, msg.mode);
       case 'cancel':  return this.controller?.abort();
@@ -111,11 +158,18 @@ class ChatViewProvider {
   newChat() {
     this.started = false;
     this.primed = false;
+    this.needsResume = false;
+    this.conversationId = null;
+    this.messages = [];
+    this.save();
     this.post({ type: 'cleared' });
     this.refreshStatus();
   }
 
-  async refresh() {
+  async ready() {
+    // Replay first, so a reopened panel shows the thread it had rather than an
+    // empty state suggesting the history is gone.
+    if (this.messages.length) this.post({ type: 'restore', messages: this.messages });
     await this.refreshStatus();
     return this.refreshModels();
   }
@@ -178,28 +232,33 @@ class ChatViewProvider {
       // straight to the model, so without this it inherits whatever the bridge
       // can find — and on an account with none, or once rotation has walked
       // past the end of the list, that is nothing.
+      const model = String(cfg().get('model') || '') || null;
+      await this.resume(core, bridge, model);
+
       if (!this.started) {
-        const conv = await core.prepareConversation({
-          bridge,
-          model: String(cfg().get('model') || '') || null,
-          reuse: false,
-        });
+        const conv = await core.prepareConversation({ bridge, model, reuse: false });
         if (conv.error) throw new Error(conv.error);
+        if (conv.id) this.conversationId = conv.id;
         this.started = true;
+        this.save();
       }
 
+      let answer = '';
       await core.say(prompt, {
         bridge,
-        model: String(cfg().get('model') || '') || null,
+        model,
         signal: this.controller.signal,
         onEvent: (evt) => {
-          if (evt.type === 'delta') this.post({ type: 'assistant', text: evt.text });
-          else if (evt.type === 'reasoning') {
+          if (evt.type === 'delta') {
+            answer += evt.text;
+            this.post({ type: 'assistant', text: evt.text });
+          } else if (evt.type === 'reasoning') {
             this.post({ type: 'step', text: evt.text.split('\n')[0].slice(0, 160) });
           }
         },
       });
       this.post({ type: 'assistant', text: '\n' });
+      if (answer.trim()) this.remember('agent', `${answer}\n`);
     } catch (err) {
       const aborted = this.controller?.signal.aborted;
       this.post({ type: 'notice', text: aborted ? 'Cancelled.' : String(err?.message ?? err) });
@@ -215,6 +274,7 @@ class ChatViewProvider {
     const bridge = deps.bridgeUrl();
 
     this.post({ type: 'user', text: prompt });
+    this.remember('user', prompt);
 
     const folder = vscode.workspace.workspaceFolders?.[0];
     if (!folder) {
@@ -247,11 +307,18 @@ class ChatViewProvider {
     const flush = () => {
       const text = prose(buffered).trim();
       buffered = '';
-      if (text) this.post({ type: 'assistant', text: `${text}\n` });
+      if (!text) return;
+      this.post({ type: 'assistant', text: `${text}\n` });
+      this.remember('agent', `${text}\n`);
     };
 
     const onEvent = (evt) => {
       switch (evt.type) {
+        case 'session':
+          // The only place the id is reported, and without it a reload cannot
+          // point the bridge back at this conversation.
+          if (evt.conversation) this.conversationId = evt.conversation;
+          break;
         case 'delta':
           buffered += evt.text;
           break;
@@ -277,11 +344,14 @@ class ChatViewProvider {
         case 'error':
           flush();
           this.post({ type: 'notice', text: evt.message });
+          this.remember('notice', evt.message);
           break;
         default:
           break;
       }
     };
+
+    await this.resume(core, bridge, String(cfg().get('model') || '') || null);
 
     let overlay;
     let summary;
@@ -304,6 +374,7 @@ class ChatViewProvider {
       }));
       this.started = true;
       this.primed = true;
+      this.save();
     } catch (err) {
       flush();
       this.post({ type: 'notice', text: String(err?.message ?? err) });
@@ -314,7 +385,13 @@ class ChatViewProvider {
     flush();
 
     if (!overlay.size) {
-      if (summary) this.post({ type: 'assistant', text: `${summary}\n` });
+      // On a turn that changes nothing the DONE summary *is* the answer, so it
+      // has to be remembered like any other — flush() never sees it, because
+      // prose() strips the marker line it arrives on.
+      if (summary) {
+        this.post({ type: 'assistant', text: `${summary}\n` });
+        this.remember('agent', `${summary}\n`);
+      }
       return this.post({ type: 'busy', value: false });
     }
 

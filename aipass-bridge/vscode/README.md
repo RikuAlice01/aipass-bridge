@@ -63,6 +63,19 @@ filter this project exists to stay under.
 Within one conversation the instructions go out **once**. The server keeps the
 history, so every later turn is just the question.
 
+### The session is kept locally
+
+The thread and the conversation it belongs to are stored in VS Code's
+`workspaceState`, so closing the panel — or reloading the window — leaves both
+where they were. The first turn afterwards points the bridge back at that
+conversation rather than opening a new one. **New chat** clears it.
+
+Workspace-scoped, because the conversation is about this project. Trimmed to
+200 messages or 96kB, whichever comes first: `workspaceState` is not a database.
+
+No credential is involved. The cookie lives in the browser and stays there;
+what is stored here is the conversation, not the way in.
+
 Both modes share the panel's conversation: whichever asks first opens it. A
 conversation opened by Ask has never been given the instructions, so the next
 Agent turn still sends them — the panel tracks *has a conversation* separately
