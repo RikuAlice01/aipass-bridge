@@ -272,7 +272,13 @@ function startChat({ modelId, text, onDelta, onDone, onError }) {
       onDelta: (part) => { delivered++; onDelta(part); },
       onDone,
       onError: (message) => {
-        const rejected = /conversation not found|returned 404|returned 409/i.test(message);
+        // 403 CHAT_UNAUTHORIZED / "conversation has been deleted" is the same
+        // situation as a 404: this conversation is gone, the next one is fine.
+        // Matched on the body rather than the status, because a 403 from an
+        // edge filter is a different failure that rotating would only hide.
+        const rejected =
+          /conversation not found|returned 404|returned 409/i.test(message) ||
+          /CHAT_UNAUTHORIZED|conversation (?:has been deleted|is no longer)/i.test(message);
         if (rejected && attempts <= 3 && delivered === 0 && !PINNED_CONVERSATION) {
           log(`conversation ${conversationId} rejected, trying the next one`);
           conversationIndex++;
@@ -550,7 +556,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  log(`aipass bridge on http://${HOST}:${PORT}`);
+  log(`AI Bridge on http://${HOST}:${PORT}`);
   log(`  default model : ${defaultModel}`);
   log(`  conversation  : ${PINNED_CONVERSATION || 'most recent on the account'}`);
   log('  waiting for the Chrome extension…');

@@ -84,37 +84,42 @@ async function ask(text) {
   stdout.write(wrote ? '\n' : dim('\n(no reply)\n'));
 }
 
-if (question) {
-  await ask(question);
-  process.exit(0);
+async function interactive() {
+  console.log(bold('aipass') + dim(`  model ${model}  ·  conversation ${status.conversation ?? 'resolves on first message'}`));
+  console.log(dim('/model <id> to switch  ·  /models to list  ·  Ctrl+C to quit\n'));
+
+  const rl = readline.createInterface({ input: stdin, output: stdout });
+  for (;;) {
+    let line;
+    try { line = (await rl.question(bold('> '))).trim(); }
+    catch { break; } // Ctrl+C / Ctrl+D
+    if (!line) continue;
+
+    if (line === '/models') {
+      const { data } = await fetch(`${BRIDGE}/v1/models`).then((r) => r.json());
+      for (const m of data) console.log(`  ${m.id.padEnd(38)} ${m.name}${m.free_credit ? dim('  [free]') : ''}`);
+      continue;
+    }
+    if (line.startsWith('/model ')) {
+      model = line.slice(7).trim();
+      await fetch(`${BRIDGE}/config`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ defaultModel: model }),
+      }).catch(() => {});
+      console.log(dim(`  model ${model}`));
+      continue;
+    }
+
+    await ask(line);
+    console.log();
+  }
+  rl.close();
 }
 
-console.log(bold('aipass') + dim(`  model ${model}  ·  conversation ${status.conversation ?? 'resolves on first message'}`));
-console.log(dim('/model <id> to switch  ·  /models to list  ·  Ctrl+C to quit\n'));
-
-const rl = readline.createInterface({ input: stdin, output: stdout });
-for (;;) {
-  let line;
-  try { line = (await rl.question(bold('> '))).trim(); }
-  catch { break; } // Ctrl+C / Ctrl+D
-  if (!line) continue;
-
-  if (line === '/models') {
-    const { data } = await fetch(`${BRIDGE}/v1/models`).then((r) => r.json());
-    for (const m of data) console.log(`  ${m.id.padEnd(38)} ${m.name}${m.free_credit ? dim('  [free]') : ''}`);
-    continue;
-  }
-  if (line.startsWith('/model ')) {
-    model = line.slice(7).trim();
-    await fetch(`${BRIDGE}/config`, {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ defaultModel: model }),
-    }).catch(() => {});
-    console.log(dim(`  model ${model}`));
-    continue;
-  }
-
-  await ask(line);
-  console.log();
-}
-rl.close();
+// Let the process end on its own rather than calling process.exit(): on
+// Windows, exiting while undici still holds the response socket trips a libuv
+// assertion (!(handle->flags & UV_HANDLE_CLOSING)) and the run dies with
+// 0xC0000409 instead of 0. The stream is fully consumed by here, so nothing
+// is left to keep the loop alive.
+if (question) await ask(question);
+else await interactive();

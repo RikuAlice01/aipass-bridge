@@ -1,0 +1,30 @@
+[package]
+name = "aipass-bridge"
+version = "0.1.0"
+edition = "2021"
+description = "AI Bridge — local relay to de.aipass.net, in the system tray."
+license = "MIT"
+
+[dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util", "signal"] }
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+bytes = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4"] }
+tokio-stream = "0.1"
+futures-util = { version = "0.3", default-features = false }
+
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"
+
+[target.'cfg(windows)'.dependencies]
+tray-icon = "0.21"
+windows-sys = { version = "0.61", features = ["Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_System_Console"] }
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true

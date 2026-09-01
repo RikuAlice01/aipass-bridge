@@ -71,5 +71,12 @@ $('save').addEventListener('click', async () => {
 
 $('refresh').addEventListener('click', () => refresh(true));
 
+// chrome.tabs.create rather than an anchor: a popup closes the moment focus
+// leaves it, and this way the tab is opened before that happens.
+$('site').addEventListener('click', () => {
+  chrome.tabs.create({ url: 'https://de.aipass.net/chat' });
+  window.close();
+});
+
 refresh(true);
 setInterval(() => refresh(false), 1500);

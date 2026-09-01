@@ -44,3 +44,15 @@ next-env.d.ts
 apipass*.md
 aipass*.md
 *.har
+
+# staged into the VS Code extension by vscode/build.mjs; source of truth is
+# aipass-bridge/agent/core.mjs
+/aipass-bridge/vscode/agent/
+/aipass-bridge/vscode/LICENSE
+/aipass-bridge/vscode/*.vsix
+
+# local working plan — deliberately not shared
+/PLAN.md
+
+# rust build output
+/aipass-bridge/rust/target/

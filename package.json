@@ -4,6 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "node aipass-bridge/bridge/server.mjs",
+    "bridge:build": "cargo build --release --manifest-path aipass-bridge/rust/Cargo.toml",
+    "bridge:tray": "cargo run --release --manifest-path aipass-bridge/rust/Cargo.toml",
+    "test:rust": "node aipass-bridge/rust/verify.mjs",
     "test": "node --test aipass-bridge/test/*.test.mjs",
     "chat": "node aipass-bridge/chat.mjs",
     "agent": "node aipass-bridge/agent.mjs",

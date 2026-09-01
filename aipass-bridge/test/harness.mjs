@@ -5,8 +5,11 @@ import net from 'node:net';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const HERE = new URL('.', import.meta.url).pathname;
+// fileURLToPath, not .pathname: on Windows the latter yields "/E:/…", which
+// path.join then turns into "\E:\…" — a path that does not exist.
+const HERE = fileURLToPath(new URL('.', import.meta.url));
 export const SERVER = path.join(HERE, '..', 'bridge', 'server.mjs');
 export const AGENT = path.join(HERE, '..', 'agent.mjs');
 export const CHAT = path.join(HERE, '..', 'chat.mjs');
@@ -31,9 +34,18 @@ export async function waitFor(check, { timeout = 5000, every = 25 } = {}) {
   }
 }
 
+// AIPASS_TEST_BRIDGE lets the same suite drive a different implementation of
+// the bridge -- the Rust one -- over the identical HTTP surface. If a port is
+// equivalent, these tests cannot tell the difference; where it is not, they
+// say exactly which behaviour diverged.
+const ALT_BRIDGE = process.env.AIPASS_TEST_BRIDGE;
+
 export async function startBridge(env = {}) {
   const port = await freePort();
-  const child = spawn(process.execPath, [SERVER], {
+  const [cmd, args] = ALT_BRIDGE
+    ? [ALT_BRIDGE, ['--headless']]
+    : [process.execPath, [SERVER]];
+  const child = spawn(cmd, args, {
     env: { ...process.env, AIPASS_PORT: String(port), ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

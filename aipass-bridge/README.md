@@ -46,6 +46,8 @@ Ctrl+C quits.
 | `npm run conversations` | list conversations and which is in use |
 | `npm test` | run the test suite |
 
+The same agent also runs inside VS Code — see [vscode/](vscode/).
+
 `npm run dev:next` still starts the Next.js app in this repo.
 
 ## What you get
@@ -139,6 +141,23 @@ The npm scripts in this repo avoid `node -e "…"` one-liners for exactly this
 reason — the agent reads `package.json` early in almost any task, and a script
 field shaped like code execution got the whole read rejected.
 
+## In VS Code
+
+`@aipass` in the chat panel, same agent loop, edits staged as a reviewable diff:
+
+```
+@aipass what does the bridge do when the extension disconnects mid-stream?
+@aipass add a health route that returns ok
+```
+
+Open [vscode/](vscode/) in VS Code and press F5. The bridge and an open
+de.aipass.net tab are still required — VS Code is a fourth hop, not a
+replacement for the browser, because the cookie has to stay where it is.
+
+The loop itself lives in [agent/core.mjs](agent/core.mjs), which carries no host:
+`npm run agent` hands it `node:fs` and an ANSI printer, the extension hands it
+`workspace.fs` and a chat stream. Details in [vscode/README.md](vscode/README.md).
+
 ## Conversations
 
 The bridge can create them, the way the chat page does — a form post to
@@ -185,9 +204,11 @@ chat. Only the last user message is forwarded.
 npm test
 ```
 
-32 tests, no dependencies, about 1.5 seconds. `test/harness.mjs` runs the real
+98 tests, no dependencies, about 2 seconds. `test/harness.mjs` runs the real
 bridge as a subprocess and a scriptable stand-in for the extension, so tests
 drive the actual HTTP surface and the real CLIs rather than mocks of them.
+`test/vscode-stub.mjs` does the same for the VS Code API, so the editor
+extension is driven against the real bridge without VS Code.
 
 They cover the failures this thing actually hit: that only the newest user
 message is forwarded and never an assistant turn; conversation rotation past a
