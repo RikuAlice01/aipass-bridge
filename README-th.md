@@ -344,8 +344,8 @@ npm run bridge:tray      # build แล้วรันเลย
 ชุดเทสต์ที่สอง** ชุดเดิมรันกับทั้งสองตัว:
 
 ```bash
-npm test            # 90 ตัว กับ Node bridge
-npm run test:rust   # 90 ตัวเดิม กับตัว Rust
+npm test            # 93 ตัว กับ Node bridge
+npm run test:rust   # 93 ตัวเดิม กับตัว Rust
 ```
 
 รายละเอียดที่ [aipass-bridge/rust/README.md](aipass-bridge/rust/README.md)
@@ -477,7 +477,7 @@ popup เปลี่ยนโมเดลเริ่มต้นกับ URL 
 
 **เทสต์รันไม่ขึ้นเลย** — น่าจะยังอยู่บน checkout เก่า · ทั้งบั๊ก path บน Windows
 ใน harness และ `process.exit` ที่ทำให้ `chat.mjs` ตาย แก้แล้วทั้งคู่ ·
-รัน `npm test` ควรได้ 90 ผ่านในราวสองวินาที
+รัน `npm test` ควรได้ 93 ผ่านในราวสองวินาที
 
 ---
 
@@ -523,7 +523,7 @@ Chrome เก็บ MV3 worker ที่ว่างงานทิ้งทุ�
 | [aipass-bridge/chat.mjs](aipass-bridge/chat.mjs) | client แชทใน terminal |
 | [aipass-bridge/vscode/](aipass-bridge/vscode/) | VS Code extension |
 | [aipass-bridge/rust/](aipass-bridge/rust/) | bridge ตัวเดียวกันในภาษา Rust เป็นแอพบน tray |
-| [aipass-bridge/test/](aipass-bridge/test/) | เทสต์ 90 ตัว |
+| [aipass-bridge/test/](aipass-bridge/test/) | เทสต์ 93 ตัว |
 | [app/](app/) | แอป Next.js ที่ repo นี้ถูก scaffold มา — ไม่ได้แตะ |
 
 ---
@@ -534,7 +534,7 @@ Chrome เก็บ MV3 worker ที่ว่างงานทิ้งทุ�
 npm test
 ```
 
-เทสต์ 90 ตัว ไม่มี dependency ใช้เวลาราวสองวินาที ·
+เทสต์ 93 ตัว ไม่มี dependency ใช้เวลาราวสองวินาที ·
 [test/harness.mjs](aipass-bridge/test/harness.mjs) รัน bridge ตัวจริงเป็น
 subprocess คู่กับตัวแทน extension ที่เขียนสคริปต์ได้ ส่วน
 [test/vscode-stub.mjs](aipass-bridge/test/vscode-stub.mjs) ทำแบบเดียวกันกับ API

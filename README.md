@@ -349,7 +349,7 @@ behaviour, and no credential reaches it either. How that is kept honest —
 there is no second test suite, the existing one runs against both:
 
 ```bash
-npm test            # 90 against the Node bridge
+npm test            # 93 against the Node bridge
 npm run test:rust   # the same 76 against the Rust one
 ```
 
@@ -484,7 +484,7 @@ The popup can also change the default model and the bridge URL at runtime.
 
 **Tests fail to even start** — you are probably on an old checkout. Both the
 Windows path bug in the harness and the `process.exit` crash in `chat.mjs` are
-fixed; run `npm test` and expect 90 passing in about two seconds.
+fixed; run `npm test` and expect 93 passing in about two seconds.
 
 ---
 
@@ -532,7 +532,7 @@ out in [aipass-bridge/handoff.html](aipass-bridge/handoff.html).
 | [aipass-bridge/chat.mjs](aipass-bridge/chat.mjs) | terminal chat client |
 | [aipass-bridge/vscode/](aipass-bridge/vscode/) | VS Code extension |
 | [aipass-bridge/rust/](aipass-bridge/rust/) | the same bridge in Rust, as a tray app |
-| [aipass-bridge/test/](aipass-bridge/test/) | 90 tests |
+| [aipass-bridge/test/](aipass-bridge/test/) | 93 tests |
 | [app/](app/) | the Next.js app this repo was scaffolded from — untouched |
 
 ---
@@ -543,7 +543,7 @@ out in [aipass-bridge/handoff.html](aipass-bridge/handoff.html).
 npm test
 ```
 
-90 tests, no dependencies, about two seconds.
+93 tests, no dependencies, about two seconds.
 [test/harness.mjs](aipass-bridge/test/harness.mjs) runs the real bridge as a
 subprocess alongside a scriptable stand-in for the extension, and
 [test/vscode-stub.mjs](aipass-bridge/test/vscode-stub.mjs) does the same for the

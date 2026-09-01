@@ -523,6 +523,82 @@ test('the preamble no longer forces English', async () => {
   assert.match(text, /same language|whatever language/i, 'it should follow the asker instead');
 });
 
+test('Ask mode works on an account with no conversation yet', async (t) => {
+  // Agent mode opens one on its way through runAgent; Ask went straight to the
+  // model and inherited whatever the bridge could find, which on a fresh
+  // account is nothing at all.
+  const dir = tempDir({ 'a.txt': 'x' });
+  const ext = await new FakeExtension(bridge.base, {
+    conversations: [],
+    onChat: scripted(['Tuesday.']),
+  }).connect();
+  t.after(() => ext.disconnect());
+
+  await fetch(`${bridge.base}/config`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ conversation: null }),
+  });
+
+  const { panel } = activate({ root: dir });
+  const view = panel();
+  await view.send({ type: 'ask', text: 'วันนี้วันอะไร', mode: 'ask' });
+
+  assert.equal(view.last('notice'), undefined,
+    `Ask should open a conversation rather than report there is none: ${JSON.stringify(view.last('notice'))}`);
+  assert.equal(ext.created.length, 1, 'it has to create one, the way Agent does');
+  assert.match(view.of('assistant').map((m) => m.text).join(''), /Tuesday\./);
+});
+
+test('Ask and Agent share one conversation, but only Agent primes it', async (t) => {
+  // The panel is one conversation whichever mode is driving. But a
+  // conversation opened by Ask has never seen the instructions, so a later
+  // Agent turn must still send them -- priming is about the preamble, not
+  // about whether a conversation exists.
+  const dir = tempDir({ 'a.txt': 'x' });
+  const handler = scripted(['fine', 'DONE nothing to do']);
+  const ext = await new FakeExtension(bridge.base, { conversations: [], onChat: handler }).connect();
+  t.after(() => ext.disconnect());
+
+  await fetch(`${bridge.base}/config`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ conversation: null }),
+  });
+
+  const { panel } = activate({ root: dir });
+  const view = panel();
+
+  await view.send({ type: 'ask', text: 'hello', mode: 'ask' });
+  const opened = ext.chats.at(-1).conversationId;
+  assert.equal(ext.created.length, 1);
+
+  await view.send({ type: 'ask', text: 'now read the project' });
+  assert.equal(ext.created.length, 1, 'the same conversation carries on');
+  assert.equal(ext.chats.at(-1).conversationId, opened);
+  assert.match(handler.sent.at(-1), /NEED file/,
+    'an Ask-opened conversation has no instructions yet, so Agent must send them');
+});
+
+test('a second Ask turn does not open another conversation', async (t) => {
+  const dir = tempDir({ 'a.txt': 'x' });
+  const ext = await new FakeExtension(bridge.base, {
+    conversations: [],
+    onChat: scripted(['one', 'two']),
+  }).connect();
+  t.after(() => ext.disconnect());
+
+  await fetch(`${bridge.base}/config`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ conversation: null }),
+  });
+
+  const { panel } = activate({ root: dir });
+  const view = panel();
+  await view.send({ type: 'ask', text: 'first', mode: 'ask' });
+  await view.send({ type: 'ask', text: 'second', mode: 'ask' });
+
+  assert.equal(ext.created.length, 1, 'one conversation for the session');
+});
+
 /* ------------------------------------------------------------ model picker */
 
 test('the panel lists the models the account can use', async (t) => {

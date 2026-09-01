@@ -21,6 +21,11 @@ class ChatViewProvider {
     // conversation: the first turn opens it, later turns continue it, and
     // "New chat" drops it so the next turn opens a fresh one.
     this.started = false;
+    // Whether that conversation has been given the agent instructions. Kept
+    // apart from `started` because Ask mode opens a conversation without ever
+    // sending them — treating the two as one would leave a later Agent turn
+    // skipping a preamble the server never received.
+    this.primed = false;
   }
 
   post(message) {
@@ -105,6 +110,7 @@ class ChatViewProvider {
 
   newChat() {
     this.started = false;
+    this.primed = false;
     this.post({ type: 'cleared' });
     this.refreshStatus();
   }
@@ -168,6 +174,20 @@ class ChatViewProvider {
   /// bigger payload is a bigger target for the upstream filter.
   async askPlain(core, prompt, bridge, cfg) {
     try {
+      // Agent mode opens a conversation on its way through runAgent. Ask goes
+      // straight to the model, so without this it inherits whatever the bridge
+      // can find — and on an account with none, or once rotation has walked
+      // past the end of the list, that is nothing.
+      if (!this.started) {
+        const conv = await core.prepareConversation({
+          bridge,
+          model: String(cfg().get('model') || '') || null,
+          reuse: false,
+        });
+        if (conv.error) throw new Error(conv.error);
+        this.started = true;
+      }
+
       await core.say(prompt, {
         bridge,
         model: String(cfg().get('model') || '') || null,
@@ -278,11 +298,12 @@ class ChatViewProvider {
         reuse: this.started,
         // The server keeps the history, so the instructions go out once per
         // conversation rather than once per turn.
-        primed: this.started,
+        primed: this.primed,
         signal: this.controller.signal,
         onEvent,
       }));
       this.started = true;
+      this.primed = true;
     } catch (err) {
       flush();
       this.post({ type: 'notice', text: String(err?.message ?? err) });

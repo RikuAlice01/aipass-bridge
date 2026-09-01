@@ -63,6 +63,11 @@ filter this project exists to stay under.
 Within one conversation the instructions go out **once**. The server keeps the
 history, so every later turn is just the question.
 
+Both modes share the panel's conversation: whichever asks first opens it. A
+conversation opened by Ask has never been given the instructions, so the next
+Agent turn still sends them — the panel tracks *has a conversation* separately
+from *that conversation has the preamble*.
+
 The panel takes the editor's theme rather than a palette of its own — a
 light-blue card in someone's dark theme reads as a bug.
 
