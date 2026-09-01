@@ -23,6 +23,7 @@ itself. Nothing is stored on disk.
 **Contents** — [Before you start](#before-you-start) ·
 [Install](#install) · [Chat](#chat-from-the-terminal) ·
 [Edit files](#edit-files-with-the-agent) · [VS Code](#vs-code) ·
+[Tray app](#tray-app) ·
 [OpenAI clients](#use-it-from-any-openai-compatible-client) ·
 [Conversations](#conversations) · [Configuration](#configuration) ·
 [Troubleshooting](#troubleshooting) · [How it works](#how-it-works) ·
@@ -56,6 +57,10 @@ git clone https://github.com/RikuAlice01/aipass-bridge.git
 cd aipass-bridge
 npm run dev
 ```
+
+> Prefer it in the taskbar instead of a terminal? `npm run bridge:build` gives
+> you a 1.1 MB `.exe` that lives in the tray and needs no Node —
+> see [Tray app](#tray-app).
 
 You should see:
 
@@ -303,6 +308,32 @@ Details in [aipass-bridge/vscode/README.md](aipass-bridge/vscode/README.md).
 
 ---
 
+## Tray app
+
+The bridge also exists as a single Windows executable that sits in the taskbar,
+so nothing has to keep a terminal open:
+
+```bash
+npm run bridge:build     # -> aipass-bridge/rust/target/release/aipass-bridge.exe
+npm run bridge:tray      # build and run it
+```
+
+Double-click it and it runs in the tray. The icon *is* the status: **amber**
+when no browser tab is attached, **green** when ready, **blue** while a job is
+in flight. Its menu shows the conversation in use and offers **Copy bridge
+URL**, **Open de.aipass.net/chat** and **Quit**.
+
+It is a port, not a rewrite: same routes, same `AIPASS_*` variables, same
+behaviour, and no credential reaches it either. How that is kept honest —
+there is no second test suite, the existing one runs against both:
+
+```bash
+npm test            # 67 against the Node bridge
+npm run test:rust   # the same 67 against the Rust one
+```
+
+Details in [aipass-bridge/rust/README.md](aipass-bridge/rust/README.md).
+
 ## Use it from any OpenAI-compatible client
 
 The bridge serves `POST /v1/chat/completions` and `GET /v1/models`:
@@ -403,6 +434,9 @@ The popup can also change the default model and the bridge URL at runtime.
 | `npm run models` | list models, marking free-credit ones |
 | `npm run conversations` | list conversations and which is in use |
 | `npm test` | run the test suite |
+| `npm run bridge:build` | build the Rust tray app |
+| `npm run bridge:tray` | build and run it |
+| `npm run test:rust` | run the suite against the Rust bridge |
 | `npm run dev:next` | start the Next.js app in [app/](app/) |
 
 ---
@@ -475,6 +509,7 @@ out in [aipass-bridge/handoff.html](aipass-bridge/handoff.html).
 | [aipass-bridge/agent.mjs](aipass-bridge/agent.mjs) | CLI front end for it |
 | [aipass-bridge/chat.mjs](aipass-bridge/chat.mjs) | terminal chat client |
 | [aipass-bridge/vscode/](aipass-bridge/vscode/) | VS Code extension |
+| [aipass-bridge/rust/](aipass-bridge/rust/) | the same bridge in Rust, as a tray app |
 | [aipass-bridge/test/](aipass-bridge/test/) | 67 tests |
 | [app/](app/) | the Next.js app this repo was scaffolded from — untouched |
 

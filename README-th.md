@@ -23,6 +23,7 @@ bridge ไม่เคยเห็น session cookie เลย เพราะ r
 **สารบัญ** — [ของที่ต้องมีก่อน](#ของที่ต้องมีก่อน) ·
 [ติดตั้ง](#ติดตั้ง) · [แชทจาก terminal](#แชทจาก-terminal) ·
 [ให้ agent แก้ไฟล์](#ให้-agent-แก้ไฟล์) · [VS Code](#vs-code) ·
+[มินิแอพบน tray](#มินิแอพบน-tray) ·
 [ต่อกับ client ที่รองรับ OpenAI](#ต่อกับ-client-ที่รองรับ-openai) ·
 [บทสนทนา](#บทสนทนา) · [การตั้งค่า](#การตั้งค่า) ·
 [แก้ปัญหา](#แก้ปัญหา) · [มันทำงานยังไง](#มันทำงานยังไง) ·
@@ -55,6 +56,9 @@ git clone https://github.com/RikuAlice01/aipass-bridge.git
 cd aipass-bridge
 npm run dev
 ```
+
+> อยากให้อยู่บน taskbar แทนที่จะเปิด terminal ค้าง? `npm run bridge:build` ได้
+> `.exe` ขนาด 1.1 MB ที่รันอยู่ใน tray และไม่ต้องมี Node — ดู [มินิแอพบน tray](#มินิแอพบน-tray)
 
 ควรเห็นแบบนี้:
 
@@ -302,6 +306,32 @@ session แชทหนึ่งอันผูกกับ conversation หน�
 
 ---
 
+## มินิแอพบน tray
+
+bridge มีอีกร่างเป็น .exe ไฟล์เดียวที่อยู่บน taskbar ของ Windows จะได้ไม่ต้องเปิด
+terminal ค้างไว้:
+
+```bash
+npm run bridge:build     # -> aipass-bridge/rust/target/release/aipass-bridge.exe
+npm run bridge:tray      # build แล้วรันเลย
+```
+
+ดับเบิลคลิกแล้วมันไปอยู่ใน tray · **ตัวไอคอนคือสถานะ**: **เหลือง** เมื่อยังไม่มี
+แท็บ browser ต่ออยู่, **เขียว** เมื่อพร้อม, **น้ำเงิน** เมื่อมีงานกำลังวิ่ง ·
+เมนูบอกว่าใช้ conversation ไหน พร้อม **Copy bridge URL**,
+**Open de.aipass.net/chat** และ **Quit**
+
+เป็นการ port ไม่ใช่เขียนใหม่: route เดิม, ตัวแปร `AIPASS_*` เดิม, พฤติกรรมเดิม
+และไม่มี credential มาถึงมันเหมือนกัน · วิธีที่ยืนยันว่าเทียบเท่าจริง — **ไม่มี
+ชุดเทสต์ที่สอง** ชุดเดิมรันกับทั้งสองตัว:
+
+```bash
+npm test            # 67 ตัว กับ Node bridge
+npm run test:rust   # 67 ตัวเดิม กับตัว Rust
+```
+
+รายละเอียดที่ [aipass-bridge/rust/README.md](aipass-bridge/rust/README.md)
+
 ## ต่อกับ client ที่รองรับ OpenAI
 
 bridge เปิด `POST /v1/chat/completions` และ `GET /v1/models` ไว้:
@@ -400,6 +430,9 @@ popup เปลี่ยนโมเดลเริ่มต้นกับ URL 
 | `npm run models` | ดูรายการโมเดล พร้อมทำเครื่องหมายตัวที่ใช้เครดิตฟรี |
 | `npm run conversations` | ดูรายการบทสนทนา และตัวที่กำลังใช้อยู่ |
 | `npm test` | รันชุดเทสต์ |
+| `npm run bridge:build` | build มินิแอพ Rust |
+| `npm run bridge:tray` | build แล้วรัน |
+| `npm run test:rust` | รันชุดเทสต์กับ bridge ตัว Rust |
 | `npm run dev:next` | เริ่มแอป Next.js ใน [app/](app/) |
 
 ---
@@ -470,6 +503,7 @@ Chrome เก็บ MV3 worker ที่ว่างงานทิ้งทุ�
 | [aipass-bridge/agent.mjs](aipass-bridge/agent.mjs) | หน้า CLI ของมัน |
 | [aipass-bridge/chat.mjs](aipass-bridge/chat.mjs) | client แชทใน terminal |
 | [aipass-bridge/vscode/](aipass-bridge/vscode/) | VS Code extension |
+| [aipass-bridge/rust/](aipass-bridge/rust/) | bridge ตัวเดียวกันในภาษา Rust เป็นแอพบน tray |
 | [aipass-bridge/test/](aipass-bridge/test/) | เทสต์ 67 ตัว |
 | [app/](app/) | แอป Next.js ที่ repo นี้ถูก scaffold มา — ไม่ได้แตะ |
 
