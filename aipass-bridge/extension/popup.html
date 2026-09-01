@@ -1,36 +1,274 @@
 <meta charset="utf-8">
+<title>aipass bridge</title>
 <style>
-  :root { color-scheme: light dark; }
-  body { font: 13px/1.5 ui-sans-serif, system-ui, sans-serif; width: 320px; margin: 0; padding: 12px; }
-  h1 { font-size: 13px; margin: 0 0 10px; letter-spacing: .02em; }
-  .row { display: flex; gap: 8px; align-items: baseline; margin-bottom: 6px; }
-  .k { opacity: .6; width: 82px; flex: none; }
-  .v { flex: 1; word-break: break-all; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
-  .up { background: #16a34a; } .down { background: #dc2626; }
-  label { display: block; opacity: .6; margin: 10px 0 3px; }
-  input, button, select { font: inherit; padding: 4px 6px; }
-  input, select { width: 100%; box-sizing: border-box; }
-  .actions { display: flex; gap: 6px; margin-top: 10px; }
-  .actions button { flex: 1; }
-  .err { color: #dc2626; margin-top: 8px; white-space: pre-wrap; }
-  .hint { opacity: .55; margin-top: 6px; }
+  /* Committed to light: popup.js paints state into these elements and the
+     palette below is tuned for a light surface, so letting the browser flip
+     native controls dark would half-apply the design. */
+  :root {
+    color-scheme: light;
+
+    --sky-50:  #F1F7FE;
+    --sky-100: #E2EEFC;
+    --sky-200: #CADFF8;
+    --sky-400: #6BA9F0;
+    --sky-500: #4A90E2;
+    --sky-600: #3B7BC8;
+
+    --ink:     #39414F;   /* dark grey — headings and values */
+    --ink-2:   #4C5666;   /* dark grey — body */
+    --muted:   #8B95A6;   /* light grey — labels and hints */
+    --line:    #E4EBF4;
+    --surface: #FFFFFF;
+
+    --good:    #3FA971;
+    --good-bg: #E6F5EE;
+    --bad:     #D9705F;
+    --bad-bg:  #FBECE9;
+
+    --r-sm: 10px;
+    --r-md: 12px;
+    --r-lg: 16px;
+    --shadow: 0 1px 2px rgba(57, 65, 79, .04), 0 6px 16px rgba(57, 65, 79, .06);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    width: 340px;
+    margin: 0;
+    padding: 14px;
+    font: 13px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--ink-2);
+    background: linear-gradient(180deg, var(--sky-50) 0%, #FBFDFF 45%);
+  }
+
+  /* ---------------------------------------------------------------- header */
+
+  header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  header img {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--r-sm);
+    /* The project icon has an opaque white ground; a hairline keeps it from
+       dissolving into the card behind it. */
+    box-shadow: 0 0 0 1px var(--line);
+  }
+  .title {
+    flex: 1;
+    min-width: 0;
+  }
+  .title b {
+    display: block;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--ink);
+    letter-spacing: .01em;
+  }
+  .title span {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  /* The pill tints itself from the dot popup.js writes inside it, so the
+     status stays a one-line innerHTML on the JS side. */
+  #conn {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    padding: 5px 10px 5px 8px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 500;
+    white-space: nowrap;
+    background: var(--sky-100);
+    color: var(--ink-2);
+    transition: background .15s ease, color .15s ease;
+  }
+  #conn:has(.up)   { background: var(--good-bg); color: #2F7F55; }
+  #conn:has(.down) { background: var(--bad-bg);  color: #A9503F; }
+
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    margin-right: 6px;
+    flex: none;
+  }
+  .up   { background: var(--good); }
+  .down { background: var(--bad); }
+
+  /* ----------------------------------------------------------------- cards */
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow);
+    padding: 12px 14px;
+    margin-bottom: 10px;
+  }
+
+  .row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 5px 0;
+  }
+  .row + .row { border-top: 1px solid var(--line); }
+  .row .k { color: var(--muted); font-size: 12px; }
+  .row .v {
+    color: var(--ink);
+    font-weight: 500;
+    text-align: right;
+    word-break: break-all;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------------------------------------------------------------- fields */
+
+  label {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin: 0 0 6px;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--muted);
+  }
+  label + label { margin-top: 14px; }
+  #count { color: var(--sky-500); font-weight: 600; }
+
+  .field + .field { margin-top: 14px; }
+
+  input, select {
+    width: 100%;
+    font: inherit;
+    color: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    padding: 9px 11px;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  select {
+    /* Room for the chevron drawn below. */
+    appearance: none;
+    padding-right: 32px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%238B95A6' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 11px center;
+    cursor: pointer;
+  }
+  input::placeholder { color: #B4BCC9; }
+  input:hover, select:hover { border-color: var(--sky-200); }
+  input:focus, select:focus {
+    outline: none;
+    border-color: var(--sky-400);
+    box-shadow: 0 0 0 3px var(--sky-100);
+  }
+
+  /* --------------------------------------------------------------- actions */
+
+  .actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  button {
+    flex: 1;
+    font: inherit;
+    font-weight: 500;
+    padding: 9px 12px;
+    border-radius: var(--r-md);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background .15s ease, border-color .15s ease, transform .06s ease;
+  }
+  button:active { transform: translateY(1px); }
+  button:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--sky-100);
+  }
+
+  #save {
+    background: var(--sky-500);
+    color: #fff;
+    box-shadow: 0 1px 2px rgba(74, 144, 226, .28);
+  }
+  #save:hover { background: var(--sky-600); }
+
+  #refresh {
+    background: var(--sky-50);
+    color: var(--ink-2);
+    border-color: var(--line);
+  }
+  #refresh:hover { background: var(--sky-100); border-color: var(--sky-200); }
+
+  /* ------------------------------------------------------------- footnotes */
+
+  .hint {
+    margin-top: 8px;
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--muted);
+  }
+
+  /* popup.js writes '' when there is nothing wrong, so the block disappears
+     rather than leaving a gap where an error used to be. */
+  .err {
+    margin-top: 10px;
+    padding: 9px 11px;
+    border-radius: var(--r-md);
+    background: var(--bad-bg);
+    color: #A9503F;
+    font-size: 11.5px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+  }
+  .err:empty { display: none; }
 </style>
-<h1>aipass bridge</h1>
-<div class="row"><span class="k">bridge</span><span class="v" id="conn"></span></div>
-<div class="row"><span class="k">chat tab</span><span class="v" id="tab"></span></div>
-<div class="row"><span class="k">active jobs</span><span class="v" id="jobs"></span></div>
 
-<label for="model">Default model <span id="count"></span></label>
-<select id="model"></select>
+<header>
+  <img src="icons/icon-32.png" alt="">
+  <span class="title">
+    <b>aipass bridge</b>
+    <span>local relay on this machine</span>
+  </span>
+  <span id="conn"></span>
+</header>
 
-<label for="url">Bridge URL</label>
-<input id="url" spellcheck="false" placeholder="http://127.0.0.1:8787">
-
-<div class="actions">
-  <button id="save">Save &amp; reconnect</button>
-  <button id="refresh">Refresh models</button>
+<div class="card">
+  <div class="row"><span class="k">chat tab</span><span class="v" id="tab"></span></div>
+  <div class="row"><span class="k">active jobs</span><span class="v" id="jobs"></span></div>
 </div>
-<div class="hint">Used only when a client sends no model of its own.</div>
+
+<div class="card">
+  <div class="field">
+    <label for="model">Default model <span id="count"></span></label>
+    <!-- Placeholder for before the first model list arrives; popup.js clears
+         the select before filling it, so this survives exactly as long as it
+         is useful. Disabled so it can never be chosen or POSTed as a model. -->
+    <select id="model"><option disabled selected>waiting for the bridge…</option></select>
+    <div class="hint">Used only when a client sends no model of its own.</div>
+  </div>
+
+  <div class="field">
+    <label for="url">Bridge URL</label>
+    <input id="url" spellcheck="false" placeholder="http://127.0.0.1:8787">
+  </div>
+
+  <div class="actions">
+    <button id="save">Save &amp; reconnect</button>
+    <button id="refresh">Refresh models</button>
+  </div>
+</div>
+
 <div class="err" id="err"></div>
 <script src="popup.js"></script>
