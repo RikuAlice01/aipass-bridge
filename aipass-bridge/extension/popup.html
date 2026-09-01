@@ -220,6 +220,27 @@
     color: var(--muted);
   }
 
+  /* Leaves the popup rather than changing a setting, so it reads as a link
+     with a hit area — not a third button competing with the other two. */
+  button.link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    margin-top: 2px;
+    padding: 8px 12px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--sky-500);
+    font-size: 12px;
+  }
+  button.link:hover {
+    background: var(--sky-50);
+    border-color: var(--sky-200);
+  }
+  button.link svg { flex: none; opacity: .85; }
+
   /* popup.js writes '' when there is nothing wrong, so the block disappears
      rather than leaving a gap where an error used to be. */
   .err {
@@ -269,6 +290,18 @@
     <button id="refresh">Refresh models</button>
   </div>
 </div>
+
+<!-- Its own row, not beside Save and Refresh: those two configure the bridge,
+     this one leaves the popup entirely. -->
+<button id="site" class="link">
+  <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+    <path d="M6.5 3.5H3.2A1.2 1.2 0 0 0 2 4.7v8.1A1.2 1.2 0 0 0 3.2 14h8.1a1.2 1.2 0 0 0 1.2-1.2V9.5"
+          fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+    <path d="M9.5 2h4.5v4.5M14 2 7.6 8.4"
+          fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  aipass.go.th
+</button>
 
 <div class="err" id="err"></div>
 <script src="popup.js"></script>
