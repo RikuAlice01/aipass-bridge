@@ -1,4 +1,4 @@
-# aipass bridge for VS Code
+# AI Bridge for VS Code
 
 `@aipass` in the chat panel: ask about the workspace, or ask for an edit. Reads
 and edits go through the same agent loop the CLI uses, and land as a staged diff
@@ -29,7 +29,7 @@ Check all three with `@aipass /status`.
 
 ## The panel
 
-Click the aipass icon in the activity bar. Type a question, press Enter —
+Click the AI Bridge icon in the activity bar. Type a question, press Enter —
 Shift+Enter for a new line. Tool activity collapses into a **steps** block so a
 long run does not bury the answer it produced, edits arrive as a staged list
 with **Review** / **Apply** / **Discard**, and **New chat** starts a fresh

@@ -53,11 +53,11 @@ class ChatViewProvider {
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${n}'; img-src ${webview.cspSource};">
 <link rel="stylesheet" href="${asset('chat.css')}">
-<title>aipass</title>
+<title>AI Bridge</title>
 </head>
 <body>
   <div class="bar">
-    <span class="name">aipass</span>
+    <span class="name">AI Bridge</span>
     <span class="pill" id="status"><span class="dot"></span><span>checking…</span></span>
     <button class="icon-btn" id="new" title="Start a new conversation">New chat</button>
   </div>

@@ -268,7 +268,7 @@ Then **Extensions: Install from VSIX…** in the command palette.
 
 ### Using it
 
-Click the aipass icon in the activity bar. Enter sends, Shift+Enter breaks the
+Click the AI Bridge icon in the activity bar. Enter sends, Shift+Enter breaks the
 line; tool activity collapses into a **steps** block, edits arrive as a staged
 list with **Review** / **Apply** / **Discard**, and **New chat** opens a fresh
 conversation. The panel follows the editor's theme.

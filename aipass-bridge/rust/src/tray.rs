@@ -79,7 +79,7 @@ pub fn run(state: Shared, addr: SocketAddr) {
 
     let mut builder = TrayIconBuilder::new()
         .with_menu(Box::new(menu))
-        .with_tooltip(format!("aipass bridge · {url}"));
+        .with_tooltip(format!("AI Bridge · {url}"));
     if let Some(icon) = app_icon() {
         builder = builder.with_icon(icon);
     }
@@ -117,7 +117,7 @@ pub fn run(state: Shared, addr: SocketAddr) {
         if now != last {
             last = now;
             let label = status_line(now.0, now.1);
-            let _ = tray.set_tooltip(Some(format!("aipass bridge · {label}")));
+            let _ = tray.set_tooltip(Some(format!("AI Bridge · {label}")));
             items.status.set_text(&label);
             items.conversation.set_text(format!(
                 "conversation: {}",

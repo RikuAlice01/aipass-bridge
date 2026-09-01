@@ -349,7 +349,7 @@ function activate(context) {
   let terminal = null;
   const getTerminal = (cwd) => {
     if (!terminal || terminal.exitStatus !== undefined) {
-      terminal = vscode.window.createTerminal({ name: 'aipass', cwd });
+      terminal = vscode.window.createTerminal({ name: 'AI Bridge', cwd });
       context.subscriptions.push(terminal);
     }
     return terminal;

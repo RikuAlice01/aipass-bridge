@@ -265,7 +265,7 @@ npm run package          # -> aipass-bridge-vscode-0.1.0.vsix
 
 ### วิธีใช้
 
-กดไอคอน aipass บน activity bar · Enter ส่ง, Shift+Enter ขึ้นบรรทัดใหม่ ·
+กดไอคอน AI Bridge บน activity bar · Enter ส่ง, Shift+Enter ขึ้นบรรทัดใหม่ ·
 กิจกรรมของ tool ถูกพับเป็นบล็อก **steps** การแก้ไขมาเป็นรายการพร้อม
 **Review** / **Apply** / **Discard** และ **New chat** เปิดบทสนทนาใหม่ ·
 แผงนี้ใช้ธีมของ editor ไม่ได้ตั้งสีของตัวเอง

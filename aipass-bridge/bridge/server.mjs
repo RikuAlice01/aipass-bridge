@@ -556,7 +556,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  log(`aipass bridge on http://${HOST}:${PORT}`);
+  log(`AI Bridge on http://${HOST}:${PORT}`);
   log(`  default model : ${defaultModel}`);
   log(`  conversation  : ${PINNED_CONVERSATION || 'most recent on the account'}`);
   log('  waiting for the Chrome extension…');

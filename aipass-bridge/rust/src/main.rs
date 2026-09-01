@@ -1,4 +1,4 @@
-//! aipass bridge, as a tray app.
+//! AI Bridge, as a tray app.
 //!
 //! Same four hops as ever — terminal or editor, this bridge, the Chrome
 //! extension, a de.aipass.net tab — with the bridge living in the taskbar
@@ -83,7 +83,7 @@ fn main() {
 }
 
 fn banner(state: &Shared, addr: &SocketAddr) {
-    bridge::log(format!("aipass bridge on http://{addr}"));
+    bridge::log(format!("AI Bridge on http://{addr}"));
     bridge::log(format!("  default model : {}", state.default_model()));
     bridge::log(format!(
         "  conversation  : {}",

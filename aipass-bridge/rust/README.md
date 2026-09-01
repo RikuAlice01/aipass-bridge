@@ -1,4 +1,4 @@
-# aipass bridge — tray app
+# AI Bridge — tray app
 
 The bridge as a single 1.1 MB executable that lives in the Windows taskbar,
 instead of a terminal window you have to keep open.

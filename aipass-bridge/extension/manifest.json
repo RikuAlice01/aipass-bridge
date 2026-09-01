@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "aipass bridge",
+  "name": "AI Bridge",
   "version": "0.1.0",
   "description": "Relays local OpenAI-compatible requests through an open de.aipass.net tab.",
   "icons": {
@@ -48,7 +48,7 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "aipass bridge",
+    "default_title": "AI Bridge",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png",

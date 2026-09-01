@@ -1,6 +1,6 @@
 {
   "name": "aipass-bridge-vscode",
-  "displayName": "aipass bridge",
+  "displayName": "AI Bridge",
   "description": "Read and edit the workspace through de.aipass.net, via the local bridge.",
   "version": "0.1.0",
   "publisher": "aipass",
@@ -22,7 +22,7 @@
       "activitybar": [
         {
           "id": "aipass",
-          "title": "aipass",
+          "title": "AI Bridge",
           "icon": "media/aipass.svg"
         }
       ]
@@ -40,7 +40,7 @@
       {
         "id": "aipass.agent",
         "name": "aipass",
-        "fullName": "aipass",
+        "fullName": "AI Bridge",
         "description": "Ask about this workspace, or ask for an edit",
         "isSticky": true,
         "commands": [
@@ -90,7 +90,7 @@
       ]
     },
     "configuration": {
-      "title": "aipass bridge",
+      "title": "AI Bridge",
       "properties": {
         "aipass.bridge": {
           "type": "string",

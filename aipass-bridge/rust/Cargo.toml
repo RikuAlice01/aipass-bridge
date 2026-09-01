@@ -2,7 +2,7 @@
 name = "aipass-bridge"
 version = "0.1.0"
 edition = "2021"
-description = "Local bridge to de.aipass.net, in the system tray."
+description = "AI Bridge — local relay to de.aipass.net, in the system tray."
 license = "MIT"
 
 [dependencies]
