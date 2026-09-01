@@ -5,8 +5,11 @@ import net from 'node:net';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const HERE = new URL('.', import.meta.url).pathname;
+// fileURLToPath, not .pathname: on Windows the latter yields "/E:/…", which
+// path.join then turns into "\E:\…" — a path that does not exist.
+const HERE = fileURLToPath(new URL('.', import.meta.url));
 export const SERVER = path.join(HERE, '..', 'bridge', 'server.mjs');
 export const AGENT = path.join(HERE, '..', 'agent.mjs');
 export const CHAT = path.join(HERE, '..', 'chat.mjs');
