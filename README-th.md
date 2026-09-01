@@ -1,161 +1,479 @@
 # aipass-bridge
 
-ใช้ [de.aipass.net](https://de.aipass.net/chat) จาก terminal — แชทแบบสตรีม
-เปลี่ยนโมเดลได้ พร้อม agent ที่แก้ไฟล์ในเครื่องได้ โดยที่ credential
-ไม่หลุดออกจาก browser แม้แต่ตัวเดียว
+ใช้ [de.aipass.net](https://de.aipass.net/chat) จาก terminal, จาก editor,
+หรือจาก client ตัวไหนก็ได้ที่รองรับ OpenAI — โดยที่ credential ไม่หลุดออกจาก
+browser แม้แต่ตัวเดียว
 
 > English version: [README.md](README.md)
 
 ```
-terminal ──HTTP──▶ bridge (node, ไม่มี dependency, :8787)
-                      │  SSE: ส่งงานออก, POST: ส่ง delta กลับ
-                      ▼
-                   Chrome extension service worker
-                      │  chrome.runtime
-                      ▼
-                   แท็บ de.aipass.net ──▶ /actions/send-message/<id>
+คุณ ──HTTP──▶ bridge (node, ไม่มี dependency, :8787)
+                 │  SSE: ส่งงานออก, POST: ส่ง delta กลับ
+                 ▼
+              Chrome extension service worker
+                 │  chrome.runtime
+                 ▼
+              แท็บ de.aipass.net ──▶ /actions/send-message/<id>
 ```
 
 bridge ไม่เคยเห็น session cookie เลย เพราะ request จริงถูกยิงในฐานะ JavaScript
 ธรรมดาของหน้าเว็บ จากในแท็บ de.aipass.net ที่เปิดค้างไว้ — Chrome จึงแนบ cookie
 ให้เอง และไม่มีอะไรถูกเก็บลงดิสก์
 
-## โครงสร้าง repository
+**สารบัญ** — [ของที่ต้องมีก่อน](#ของที่ต้องมีก่อน) ·
+[ติดตั้ง](#ติดตั้ง) · [แชทจาก terminal](#แชทจาก-terminal) ·
+[ให้ agent แก้ไฟล์](#ให้-agent-แก้ไฟล์) · [VS Code](#vs-code) ·
+[ต่อกับ client ที่รองรับ OpenAI](#ต่อกับ-client-ที่รองรับ-openai) ·
+[บทสนทนา](#บทสนทนา) · [การตั้งค่า](#การตั้งค่า) ·
+[แก้ปัญหา](#แก้ปัญหา) · [มันทำงานยังไง](#มันทำงานยังไง) ·
+[เทสต์](#เทสต์) · [ข้อจำกัด](#ข้อจำกัดที่ทราบ)
 
-| path | คืออะไร |
+---
+
+## ของที่ต้องมีก่อน
+
+| ต้องมี | เพราะอะไร |
 |---|---|
-| [aipass-bridge/bridge/server.mjs](aipass-bridge/bridge/server.mjs) | ตัว bridge — HTTP server, job hub, และ endpoint แบบ OpenAI-compatible |
-| [aipass-bridge/extension/](aipass-bridge/extension/) | Chrome MV3 extension (service worker + content script ทั้ง MAIN/ISOLATED) |
-| [aipass-bridge/chat.mjs](aipass-bridge/chat.mjs) | client สำหรับแชทใน terminal |
-| [aipass-bridge/agent.mjs](aipass-bridge/agent.mjs) | agent แก้ไฟล์ พร้อม overlay filesystem แบบ dry run |
-| [aipass-bridge/list.mjs](aipass-bridge/list.mjs) | ตัวพิมพ์ผลของ `npm run models` / `conversations` |
-| [aipass-bridge/agent/core.mjs](aipass-bridge/agent/core.mjs) | ตัว loop ของ agent ที่ไม่ผูกกับ host — CLI กับ editor ใช้ร่วมกัน |
-| [aipass-bridge/vscode/](aipass-bridge/vscode/) | VS Code extension: chat participant `@aipass`, พักการแก้ไขไว้ให้ตรวจก่อน |
-| [aipass-bridge/test/](aipass-bridge/test/) | เทสต์ 67 ตัว ที่รัน bridge จริงเป็น subprocess |
-| [aipass-bridge/handoff.html](aipass-bridge/handoff.html) | คู่มือฉบับเดี่ยว: สถาปัตยกรรม, การไล่หาสาเหตุ 403, และก้าวถัดไป |
-| [app/](app/) | แอป Next.js 16 ที่ repo นี้ถูก scaffold มา — ไม่ได้แตะ |
+| **Node 20+** | top-level await, `fetch` แบบ global, test runner ในตัว · ทดสอบบน v24.12.0 |
+| **Google Chrome** | extension เป็น MV3 ต้องรันบน Chrome เท่านั้น ไม่มีตัวแทน — ดู [มันทำงานยังไง](#มันทำงานยังไง) |
+| **บัญชี de.aipass.net ที่ใช้ได้จริง** | ต้องเปิด [de.aipass.net/chat](https://de.aipass.net/chat) แล้วส่งข้อความด้วยมือได้ก่อน |
 
-เอกสารฉบับเต็มอยู่ที่ [aipass-bridge/README.md](aipass-bridge/README.md)
+ตัว bridge ไม่ต้อง `npm install` อะไรเลยเพราะไม่มี dependency · จะลงก็ต่อเมื่อ
+อยากรันแอป Next.js ใน [app/](app/) ด้วย
+
+> **ทุกข้อความที่ส่งจะไปโผล่ในประวัติแชทจริงของบัญชีนั้น** เพราะนี่ขับตัว
+> ผลิตภัณฑ์จริง ไม่ใช่ sandbox
+
+---
 
 ## ติดตั้ง
 
+### 1 · เอาโค้ดมาแล้วเริ่ม bridge
+
 ```bash
+git clone https://github.com/RikuAlice01/aipass-bridge.git
+cd aipass-bridge
 npm run dev
 ```
 
-โหลด extension: `chrome://extensions` → เปิด Developer mode → **Load unpacked**
-→ เลือกโฟลเดอร์ [aipass-bridge/extension](aipass-bridge/extension) จากนั้นเปิดแท็บ
-`https://de.aipass.net/chat` ทิ้งไว้ — popup ควรขึ้นว่า **connected**
+ควรเห็นแบบนี้:
 
-## สคริปต์
-
-| script | |
-|---|---|
-| `npm run dev` | เริ่ม bridge ที่พอร์ต 8787 |
-| `npm run chat` | client ใน terminal — `/models` ดูรายการ, `/model <id>` สลับ, Ctrl+C ออก |
-| `npm run agent -- "task" --root .` | ใช้เครื่องมือแก้ไฟล์ในเครื่อง ในบทสนทนาใหม่ |
-| `npm run models` | ดูรายการโมเดล พร้อมทำเครื่องหมายตัวที่ใช้เครดิตฟรี |
-| `npm run conversations` | ดูรายการบทสนทนา และตัวที่กำลังใช้อยู่ |
-| `npm test` | รันชุดเทสต์ |
-| `npm run dev:next` | เริ่มแอป Next.js |
-
-agent ตัวเดียวกันนี้รันใน VS Code ได้ด้วย — ดู [aipass-bridge/vscode/](aipass-bridge/vscode/)
-
-```bash
-npm run chat -- "ช่วยสรุปข่าว AI วันนี้"   # ถามครั้งเดียวจบ
+```
+aipass bridge on http://127.0.0.1:8787
+  default model : gemini-3.1-flash-lite
+  conversation  : most recent on the account
+  waiting for the Chrome extension…
 ```
 
-สิ่งที่ได้คือสิ่งเดียวกับที่ web UI ให้เมื่อส่งข้อความเดียวกัน รวมถึง tool
-ฝั่งเซิร์ฟเวอร์ของมันด้วย — `web_search` จะสตรีมให้เห็นสด ๆ และลิสต์แหล่งอ้างอิงตอนจบ
-กิจกรรมของ tool ถูกส่งเป็น `reasoning_content` ดังนั้น client แบบ OpenAI ที่อ่านแค่
-`content` จะเห็นคำตอบสะอาด ๆ
+**เปิดค้างไว้** ทุกคำสั่งที่เหลือคุยกับตัวนี้
 
-## ข้อจำกัดที่ทุกอย่างถูกออกแบบมารอบ ๆ มัน
+### 2 · โหลด Chrome extension
 
-ส่งได้แค่ข้อความของผู้ใช้เท่านั้น — ไม่มี system prompt ไม่มี transcript
+1. เปิด `chrome://extensions`
+2. เปิด **Developer mode** (มุมขวาบน)
+3. กด **Load unpacked**
+4. เลือกโฟลเดอร์ [aipass-bridge/extension](aipass-bridge/extension)
 
-นี่ไม่ใช่การมักง่าย แต่เป็นสิ่งที่ endpoint ยอมรับ ถ้า array `messages`
-มี turn ของ **assistant** อยู่ด้วย จะโดน `403` เปล่า ๆ จาก Google Frontend
-ตั้งแต่ก่อนที่โมเดลจะได้เห็น ส่วนการคุยหลายเทิร์นยังทำงานได้ เพราะเซิร์ฟเวอร์
-เป็นเจ้าของบทสนทนาและประวัติของมันเอง เหมือนที่ทำให้ web UI ทุกประการ
+### 3 · เปิดแท็บ de.aipass.net ทิ้งไว้
 
-## ตัว agent
+ไปที่ [https://de.aipass.net/chat](https://de.aipass.net/chat) ล็อกอินถ้ายัง
+**เปิดแท็บนี้ค้างไว้** — ไม่มีแท็บนี้ bridge ทำงานไม่ได้ และถ้าปิดกลางคัน
+ทุกอย่างหยุดทันที
+
+### 4 · เช็คว่าใช้ได้จริง
+
+กดไอคอน extension · popup ควรขึ้นว่า:
+
+| ช่อง | ควรเห็นอะไร |
+|---|---|
+| การเชื่อมต่อ | จุดเขียว + **connected** |
+| tab | `/chat` |
+| jobs | `0` |
+| Default model | dropdown มีรายการโมเดล |
+
+จากนั้น:
+
+```bash
+npm run chat -- "hello"
+```
+
+ถ้าคำตอบสตรีมออกมา แปลว่าครบทั้งสี่ hop · ถ้ามีอะไรผิด ข้ามไปที่
+[แก้ปัญหา](#แก้ปัญหา)
+
+---
+
+## แชทจาก terminal
+
+### ถามครั้งเดียวจบ
+
+```bash
+npm run chat -- "ช่วยสรุปข่าว AI วันนี้"
+npm run chat -- "SSE กับ WebSocket ต่างกันยังไง"
+```
+
+### โหมดโต้ตอบ
+
+```bash
+npm run chat
+```
+
+```
+aipass  model gemini-3.1-flash-lite  ·  conversation 7f3a1c9e2b5d4a80
+/model <id> to switch  ·  /models to list  ·  Ctrl+C to quit
+
+> aipass คืออะไร
+```
+
+| ในโหมดโต้ตอบ | |
+|---|---|
+| `/models` | ดูโมเดลทั้งหมดที่บัญชีใช้ได้ |
+| `/model <id>` | สลับโมเดล และตั้งเป็นค่าเริ่มต้นของ bridge ด้วย |
+| Ctrl+C | ออก |
+
+### Flag
+
+| flag | ค่าเริ่มต้น | |
+|---|---|---|
+| `--model <id>` | ค่าเริ่มต้นของ bridge | โมเดลสำหรับรอบนี้ |
+| `--new` | ปิด | เริ่มบทสนทนาใหม่แทนที่จะคุยต่อ |
+| `--conversation <id>` | อันล่าสุด | คุยต่อบทสนทนาที่ระบุ |
+| `--bridge <url>` | `http://127.0.0.1:8787` | bridge อยู่ไหน |
+
+```bash
+npm run chat -- --model claude-sonnet-5@default "อธิบายโค้ดเบสนี้ให้หน่อย"
+npm run chat -- --new                  # เริ่มใหม่หมด แบบโต้ตอบ
+```
+
+### ได้อะไรบ้าง
+
+ได้เหมือนที่ web UI ให้เมื่อส่งข้อความเดียวกัน **รวมถึง tool ฝั่งเซิร์ฟเวอร์ของมัน**
+`web_search` จะสตรีมให้เห็นสด ๆ และลิสต์แหล่งอ้างอิงตอนจบ:
+
+```
+[web_search] {"query":"aipass.go.th"}
+[web_search] returned 4821 chars
+AiPASS เป็นแพลตฟอร์มภายใต้โครงการ TH-AI Passport …
+sources:
+  - Aipass https://aipass.go.th/
+```
+
+กิจกรรมของ tool ถูกส่งเป็น `reasoning_content` ดังนั้น client แบบ OpenAI ที่อ่าน
+แค่ `content` จะเห็นคำตอบสะอาด ๆ · เปลี่ยนได้ที่
+[`AIPASS_TOOL_VISIBILITY`](#การตั้งค่า)
+
+---
+
+## ให้ agent แก้ไฟล์
 
 ```bash
 npm run agent -- "add a health route that returns ok" --root .
 ```
 
-ค่าเริ่มต้นเป็น dry run: การแก้ไขจะไปอยู่ใน overlay ในหน่วยความจำ โมเดลจึงอ่านงาน
-ที่ตัวเองค้างไว้กลับมาได้ ตอนจบจะได้ unified diff และไม่มีอะไรแตะดิสก์จนกว่าจะใส่
-`--apply` ทุก path ถูกจำกัดอยู่ใน `--root` ส่วนการรันคำสั่ง shell ต้องเปิดด้วย
-`--allow-run`
+**ค่าเริ่มต้นเป็น dry run** การแก้ไขไปอยู่ใน overlay ในหน่วยความจำ โมเดลจึงอ่านงาน
+ที่ตัวเองค้างไว้กลับมาได้ · ตอนจบได้ unified diff และไม่มีอะไรแตะดิสก์ ·
+ใส่ `--apply` ถึงจะเขียนจริง
 
-มันทำงาน *ภายใต้* ข้อจำกัดข้างบน ไม่ใช่ฝืนมัน:
+### ตัวอย่างรันเต็ม ๆ
 
-- **ส่งคำสั่งครั้งเดียว** เป็นข้อความแรกของบทสนทนา เทิร์นถัด ๆ ไปจึงมีแค่ผลลัพธ์
-  ของ tool — ราวสองสามร้อยไบต์ แทนที่จะส่ง prompt ซ้ำทุกครั้ง
-- **รูปแบบเป็นภาษาพูด** (`NEED file README.md`, `EDIT`/`FIND`/`NEW`)
-  ไม่มีวงเล็บมุม ไม่มี `key=value` ไม่มี absolute path — ทุกอย่างที่ว่ามาเคยโดน 403
-  มาแล้วทั้งนั้น และไม่มีอันไหนจำเป็นเลย
-- **ไม่เคยบอกว่าโมเดลมี tool** เพราะ system prompt ของโมเดลเองระบุว่ามีแค่
-  `web_search` ถ้าเขียน preamble ให้เหมือน tool protocol มันจะปฏิเสธ
-  ด้วยเหตุผลว่าตัวเองเข้าถึงไฟล์ไม่ได้ preamble จึงบอกการแบ่งงานกันตรง ๆ แทน
-- **เทิร์นที่โดนปฏิเสธจะถูกผ่าครึ่งแล้วส่งใหม่** ผ่าซ้ำลงไปเรื่อย ๆ จนถึงราว 300 ไบต์
-  เซิร์ฟเวอร์จำแต่ละชิ้นไว้ โมเดลจึงยังได้เห็นเนื้อหาทั้งหมด
-- **ที่อยู่ loopback ถูกแทนที่** `localhost`, `127.0.0.1`, `0.0.0.0`,
-  `169.254.169.254`, `file://` จะออกไปเป็น `LCLHST`, `LOOPBACK-IP` ฯลฯ
-  แล้วถูกแปลงกลับก่อนเขียนลงไฟล์ — แค่ README ที่เขียนว่า *"open
-  http://localhost:3000"* ก็เพียงพอให้ request ถูกปฏิเสธแล้ว
-- **บรรทัดที่ส่งไม่ได้ไม่ว่าจะขนาดไหน จะถูกตัดทิ้ง** พร้อมหมายเหตุ — พวก
-  `node -e`, `curl`, `rm -rf`, `/bin/sh`, `../../` เสียแค่บรรทัดเดียว ไม่ใช่ทั้งรอบ
-
-ทุกครั้งที่รัน agent จะเริ่มบทสนทนาใหม่เสมอ เพราะการใช้ของเดิมซ้ำจะลากประวัติเก่า
-ติดมาด้วย — รวมถึงการปฏิเสธ ซึ่งโมเดลจะเห็นว่าตัวเองเคยปฏิเสธไว้แล้วปฏิเสธซ้ำ
-ใช้ `--reuse` เพื่อคุยต่อจากอันล่าสุด หรือ `--conversation ID` เพื่อระบุเจาะจง
-
-## ใน VS Code
-
-พิมพ์ `@aipass` ในแผงแชท — agent loop ตัวเดียวกัน แต่การแก้ไขจะถูกพักไว้เป็น diff
-ให้ตรวจก่อน ไม่มีอะไรแตะดิสก์จนกว่าจะกด Apply:
+```bash
+npm run agent -- "what does the bridge do when the extension disconnects?" --root .
+```
 
 ```
+task  what does the bridge do when the extension disconnects?
+root  E:\github\aipass-bridge
+mode  dry run (pass --apply to write)
+chat  a41f2c8b91d3e07f  (new)
+
+─── step 1/10 ────────────────────────────────
+  ✓ list . README.md
+─── step 2/10 ────────────────────────────────
+  ✓ read aipass-bridge/bridge/server.mjs // Local bridge to de.aipass.net's chat.
+
+✓ The job is kept and retried on the next client; it only fails after
+  AIPASS_IDLE_TIMEOUT_MS with no delta.
+
+no file changes
+```
+
+ตอนที่มันแก้อะไรจริง ๆ:
+
+```
+1 file(s) changed:
+
+--- a/app/health/route.ts
++++ b/app/health/route.ts
+@@ -1,0 +1,3 @@
++export function GET() {
++  return Response.json({ ok: true });
++}
+
+dry run — nothing written. re-run with --apply
+```
+
+### Flag
+
+| flag | ค่าเริ่มต้น | |
+|---|---|---|
+| `--root <dir>` | cwd | โฟลเดอร์เดียวที่ agent อ่าน/เขียนได้ |
+| `--apply` | ปิด | เขียนลงดิสก์จริง |
+| `--model <id>` | ค่าเริ่มต้นของ bridge | โมเดลสำหรับรอบนี้ |
+| `--max <n>` | `10` | จำนวนรอบอ่าน/แก้ก่อนหยุด |
+| `--max-result <n>` | `3000` | ตัดผลลัพธ์แต่ละ tool ที่กี่ไบต์ |
+| `--allow-run` | ปิด | ให้โมเดลรันคำสั่ง shell ได้ |
+| `--reuse` | ปิด | คุยต่อบทสนทนาล่าสุด |
+| `--conversation <id>` | — | คุยต่อบทสนทนาที่ระบุ |
+| `--bridge <url>` | `http://127.0.0.1:8787` | bridge อยู่ไหน |
+
+### เรื่องที่ควรรู้
+
+- **`--root` เป็นเส้นตาย** path ที่หลุดออกไปจะถูกปฏิเสธ ไม่ใช่ดึงกลับ ·
+  รันจากโปรเจกต์ที่ตั้งใจจริง ๆ
+- **ทุกครั้งที่รันจะเริ่มบทสนทนาใหม่** ถ้าไม่ใส่ `--reuse` หรือ `--conversation` ·
+  การใช้ของเดิมซ้ำจะลากประวัติเก่าติดมา รวมถึงการปฏิเสธ ซึ่งโมเดลจะเห็นว่าตัวเอง
+  เคยปฏิเสธไว้แล้วปฏิเสธซ้ำ
+- **`--allow-run` อันตรายจริง** โมเดลเป็นคนเลือกคำสั่ง แล้วมันรันใน shell ของคุณ
+  ที่ `--root` · ปิดไว้เถอะ ถ้าไม่ได้นั่งดูอยู่
+- **`--max-result` มีไว้เพราะตัวกรองฝั่งต้นทาง** ไม่ใช่แค่เรื่องค่า token ·
+  ตั้งสูงขึ้น = โดนปฏิเสธง่ายขึ้น
+- ดู diff ก่อน `--apply` เสมอ โมเดลเขียนทีละช่วงบรรทัด
+
+---
+
+## VS Code
+
+พิมพ์ `@aipass` ในแผงแชท ใช้ agent loop ตัวเดียวกัน · การแก้ไขจะถูกพักไว้และ
+แสดงเป็น diff ก่อน ไม่มีอะไรแตะดิสก์
+
+### รันจากซอร์ส
+
+เปิดโฟลเดอร์ [aipass-bridge/vscode/](aipass-bridge/vscode/) ใน VS Code แล้วกด **F5**
+จะมีหน้าต่าง Extension Development Host เปิดขึ้นมาพร้อม participant
+
+### หรือติดตั้งจริง
+
+```bash
+cd aipass-bridge/vscode
+npm run package          # -> aipass-bridge-vscode-0.1.0.vsix
+```
+
+แล้วใช้ **Extensions: Install from VSIX…** ใน command palette
+
+### วิธีใช้
+
+```
+@aipass /status
 @aipass what does the bridge do when the extension disconnects mid-stream?
 @aipass add a health route that returns ok
 @aipass /apply rename the log helper to `note`
 ```
 
-เปิดโฟลเดอร์ [aipass-bridge/vscode/](aipass-bridge/vscode/) ใน VS Code แล้วกด F5
-`/status` เช็ค bridge กับแท็บ, `/models` ดูรายการโมเดล, `/apply` เขียนลงดิสก์เลย
-การเขียนไปผ่าน `WorkspaceEdit` ดังนั้นกด ctrl+Z ย้อนกลับได้เหมือนการแก้ไขปกติ
+ลอง `@aipass /status` ก่อนเป็นอันดับแรก มันบอกว่า bridge ขึ้นมั้ยและมีแท็บต่ออยู่มั้ย
+ซึ่งเป็นสาเหตุของความสับสนเกือบทั้งหมด
 
-VS Code เป็น **hop ที่สี่** ไม่ใช่ตัวแทนของ browser — extension host ไม่มี cookie
-ของ de.aipass.net จึงยังต้องมี bridge กับแท็บที่เปิดค้างอยู่ดี สิ่งที่มันแทนได้คือ
-terminal เท่านั้น
+| คำสั่ง | |
+|---|---|
+| `/status` | bridge ติดต่อได้มั้ย · มีแท็บต่อมั้ย · ใช้บทสนทนาไหน |
+| `/models` | บัญชีใช้โมเดลอะไรได้บ้าง อันไหนเครดิตฟรี |
+| `/apply` | รันงานแล้วเขียนลงดิสก์เลย |
 
-`npm run package` ในโฟลเดอร์นั้นสร้าง `.vsix` สำหรับติดตั้งได้ — แต่ไม่เหมาะขึ้น
-Marketplace เพราะใช้อะไรไม่ได้เลยถ้าไม่มี bridge กับแท็บ browser
+ถ้าไม่ใส่ `/apply` การแก้ไขจะถูกพักไว้ พร้อมปุ่ม **Review** (เปิด diff editor ของจริง),
+**Apply** และ **Discard** · การเขียนไปผ่าน `WorkspaceEdit` กด ctrl+Z ย้อนได้
+เหมือนการแก้ไขปกติ
 
-ตัว loop อยู่ที่ [aipass-bridge/agent/core.mjs](aipass-bridge/agent/core.mjs)
-ซึ่งไม่ผูกกับ host เลย — ไม่มี `node:fs` ไม่มี `console` ไม่มี `process.argv`
-ฝั่ง CLI ฉีด `node:fs` กับตัวพิมพ์สี ANSI เข้าไป ส่วน extension ฉีด `workspace.fs`
-กับ chat response stream ทั้งคู่รันโค้ดชุดเดียวกัน
+### การตั้งค่า
 
-## HTTP surface
+| setting | ค่าเริ่มต้น | |
+|---|---|---|
+| `aipass.bridge` | `http://127.0.0.1:8787` | bridge อยู่ไหน |
+| `aipass.model` | *(ว่าง)* | ว่าง = ใช้ค่าเริ่มต้นของ bridge |
+| `aipass.maxSteps` | `10` | รอบอ่าน/แก้ต่อหนึ่ง request |
+| `aipass.maxResult` | `3000` | ไบต์ต่อผลลัพธ์ tool ที่ส่งขึ้นไป |
+| `aipass.allowRun` | `false` | ให้ agent ส่งคำสั่งเข้า terminal ได้ |
+| `aipass.showModelMarkers` | `false` | โชว์ protocol ดิบ `NEED`/`EDIT`/`DONE` |
 
-`POST /v1/chat/completions` และ `GET /v1/models` ทำให้ client ที่รองรับ OpenAI
-ตัวไหนก็ชี้มาที่ `http://127.0.0.1:8787/v1` ได้เลย (ส่งต่อเฉพาะข้อความสุดท้าย
-ของผู้ใช้) นอกจากนี้ยังมี `/conversations`, `/conversations/new`, `/config`,
-`/status` และกลุ่ม `/ext/*` ที่ extension คุยด้วย
+`allowRun` ส่งคำสั่งเข้า terminal ชื่อ **aipass** ที่มองเห็นได้ และผลลัพธ์
+**ไม่ถูกอ่านกลับ**เข้าบทสนทนา — โมเดลไม่เห็นว่าที่รันไปได้ผลอะไร
+
+session แชทหนึ่งอันผูกกับ conversation หนึ่งอัน เทิร์นแรกเปิด เทิร์นหลังคุยต่อ ·
+อยากได้อันสะอาดก็เปิดแชทใหม่
+
+รายละเอียดที่ [aipass-bridge/vscode/README.md](aipass-bridge/vscode/README.md)
+
+---
+
+## ต่อกับ client ที่รองรับ OpenAI
+
+bridge เปิด `POST /v1/chat/completions` และ `GET /v1/models` ไว้:
+
+```bash
+curl http://127.0.0.1:8787/v1/chat/completions \
+  -H 'content-type: application/json' \
+  -d '{"model":"gemini-3.1-flash-lite","messages":[{"role":"user","content":"hello"}]}'
+```
+
+สตรีมก็ได้ — ใส่ `"stream": true` จะได้ SSE มาตรฐานที่จบด้วย `data: [DONE]`
+
+ชี้ SDK ตัวไหนมาก็ได้:
+
+```python
+from openai import OpenAI
+client = OpenAI(base_url="http://127.0.0.1:8787/v1", api_key="unused")
+client.chat.completions.create(model="gemini-3.1-flash-lite",
+                               messages=[{"role": "user", "content": "hello"}])
+```
+
+ไม่มี auth เพราะ bridge ผูกกับ `127.0.0.1` และ credential อยู่ใน browser
+`api_key` จะใส่อะไรก็ได้
+
+> **ส่งต่อเฉพาะข้อความสุดท้ายของผู้ใช้** system prompt หรือ turn ของ assistant
+> ที่อยู่ใน `messages` จะถูกทิ้ง ไม่ได้ส่งไป · นี่เป็นข้อจำกัดจริงของ endpoint
+> ไม่ใช่การมักง่าย — ดู [มันทำงานยังไง](#มันทำงานยังไง) · คุยหลายเทิร์นยังได้
+> เพราะเซิร์ฟเวอร์จำบทสนทนาเอง
+
+ถ้า model id ขึ้นต้นด้วย `aipass/` จะถูกตัดออกให้ สำหรับ client ที่บังคับให้มี
+prefix ของผู้ให้บริการ
+
+---
+
+## บทสนทนา
+
+เซิร์ฟเวอร์เป็นเจ้าของประวัติบทสนทนา เหมือนที่ทำให้ web UI ทุกประการ
+
+```bash
+npm run conversations
+```
+
+```
+* 7f3a1c9e2b5d4a80  2026-08-31T14:22  Bridge questions
+  a41f2c8b91d3e07f  2026-08-31T09:05  New chat
+```
+
+`*` คืออันที่กำลังใช้ · ถ้าอยากสร้างใหม่โดยไม่ต้องส่งข้อความจริง:
+
+```bash
+curl -s localhost:8787/conversations/new \
+  -H 'content-type: application/json' -d '{"message":"hello"}'
+```
+
+อันไหนถูกใช้:
+
+| | |
+|---|---|
+| `npm run chat` | อันล่าสุด เพื่อให้แชทเป็นแชท |
+| `npm run chat -- --new` | อันใหม่ |
+| `npm run agent` | **อันใหม่เสมอ** ถ้าไม่ใส่ `--reuse`/`--conversation` |
+| VS Code | หนึ่ง conversation ต่อหนึ่ง session แชท |
+| `AIPASS_CONVERSATION_ID` | ปักหมุดอันเดียว ทับทุกข้อข้างบน |
+
+ถ้าบทสนทนาไหนรับข้อความไม่ได้แล้ว — `404` เมื่อถูกลบ, `409` เมื่อเซิร์ฟเวอร์ยังคิดว่า
+กำลังตอบอยู่ — bridge จะย้ายไปอันถัดไปเอง
+
+---
+
+## การตั้งค่า
 
 | env | ค่าเริ่มต้น | |
 |---|---|---|
 | `AIPASS_PORT` | `8787` | |
+| `AIPASS_HOST` | `127.0.0.1` | |
 | `AIPASS_MODEL` | `gemini-3.1-flash-lite` | ใช้เมื่อไม่ได้ระบุโมเดล |
 | `AIPASS_MODELS` | id ที่รู้จักสองตัว | รายการสำรองเมื่อยังไม่มี extension ต่ออยู่ |
 | `AIPASS_MODEL_FILTER` | `chat` | ใส่ `all` เพื่อเก็บโมเดล image/video/audio ไว้ด้วย |
-| `AIPASS_TOOL_VISIBILITY` | `reasoning` | หรือ `text` / `off` |
+| `AIPASS_TOOL_VISIBILITY` | `reasoning` | `text` แทรกในเนื้อคำตอบ, `off` ตัดทิ้ง |
 | `AIPASS_CONVERSATION_ID` | *(ไม่ตั้ง)* | ปักหมุดบทสนทนาเดียว |
 | `AIPASS_IDLE_TIMEOUT_MS` | `180000` | ให้ job ล้มเหลวหลังไม่มี delta นานเท่านี้ |
+
+```bash
+AIPASS_PORT=9000 AIPASS_TOOL_VISIBILITY=off npm run dev
+```
+
+popup เปลี่ยนโมเดลเริ่มต้นกับ URL ของ bridge ได้ตอนรันด้วย
+
+### สคริปต์ทั้งหมด
+
+| script | |
+|---|---|
+| `npm run dev` | เริ่ม bridge ที่พอร์ต 8787 |
+| `npm run chat` | client ใน terminal |
+| `npm run agent -- "task" --root .` | เครื่องมือแก้ไฟล์ในเครื่อง |
+| `npm run models` | ดูรายการโมเดล พร้อมทำเครื่องหมายตัวที่ใช้เครดิตฟรี |
+| `npm run conversations` | ดูรายการบทสนทนา และตัวที่กำลังใช้อยู่ |
+| `npm test` | รันชุดเทสต์ |
+| `npm run dev:next` | เริ่มแอป Next.js ใน [app/](app/) |
+
+---
+
+## แก้ปัญหา
+
+| เห็นอะไร | แปลว่าอะไร | ทำยังไง |
+|---|---|---|
+| `No bridge at http://127.0.0.1:8787` | bridge ไม่ได้รันอยู่ | `npm run dev` |
+| `The extension is not connected` | ไม่มีแท็บ de.aipass.net หรือ Chrome เก็บ worker ไปแล้ว | เปิด [de.aipass.net/chat](https://de.aipass.net/chat) แล้วดูว่า popup ขึ้น **connected** |
+| `no extension connected — open a de.aipass.net tab and check the popup` | แท็บถูกปิดกลางคัน | เปิดใหม่แล้วลองอีกครั้ง |
+| popup: `bridge not reachable — is server.mjs running?` | เหมือนแถวแรก แต่มองจากฝั่ง browser | `npm run dev` แล้วกด **Refresh** ใน popup |
+| popup ขึ้น **not connected** ทั้งที่เปิดแท็บอยู่ | แท็บเปิดมาก่อน extension หรือ Chrome ทิ้งแท็บไปแล้ว | รีโหลดแท็บ de.aipass.net |
+| คำตอบหยุดกลางทางแล้วเงียบไป | ไม่มี delta นานเกิน `AIPASS_IDLE_TIMEOUT_MS` | เช็คว่าแท็บยังอยู่ · คำตอบยาว ๆ ให้เพิ่มค่า timeout |
+| `Conversation not found` | id ถูกลบไปแล้วหรือมั่วขึ้นมา | `npm run conversations` ดูของจริง หรือใช้ `--new` |
+| agent: `rejected — splitting into 2 parts` | ไฟล์ไปโดนตัวกรองฝั่งต้นทาง | ไม่ต้องทำอะไร มันกู้เอง |
+| agent: `omitting 1 line(s) that cannot be sent` | มีบรรทัดหน้าตาเหมือน code execution | ปกติ · ส่วนที่เหลือของไฟล์ยังผ่านไปได้ |
+| agent: `this fragment was rejected even on its own` | บรรทัดเดียวที่ผ่านไม่ได้ไม่ว่าจะขนาดไหน | มันพิมพ์ออกมาให้ดูว่าบรรทัดไหน |
+| agent: `no marker after three replies` | โมเดลหลุดออกจาก protocol | ลอง `--model` ตัวอื่น หรือรันใหม่ — แต่ละรอบเป็นบทสนทนาใหม่อยู่แล้ว |
+| agent: `path escapes root` | โมเดลขอไฟล์นอก `--root` | ทำงานถูกต้องแล้ว |
+| VS Code: `Cannot reach aipass` | bridge หรือแท็บ | `@aipass /status` บอกว่าอันไหน |
+| VS Code: `Open a folder first` | ไม่ได้เปิด workspace folder | เปิดโฟลเดอร์โปรเจกต์ ไม่ใช่เปิดไฟล์เดี่ยว ๆ |
+
+**เทสต์รันไม่ขึ้นเลย** — น่าจะยังอยู่บน checkout เก่า · ทั้งบั๊ก path บน Windows
+ใน harness และ `process.exit` ที่ทำให้ `chat.mjs` ตาย แก้แล้วทั้งคู่ ·
+รัน `npm test` ควรได้ 67 ผ่านในราวสองวินาที
+
+---
+
+## มันทำงานยังไง
+
+### ทำไม browser ถึงตัดออกไม่ได้
+
+การยืนยันตัวตนคือ session cookie แบบ same-origin · `page.js` ของ extension รันใน
+**MAIN world** ของแท็บ de.aipass.net ดังนั้น `fetch` ของมันคือ first-party request
+ของจริง Chrome จึงแนบ cookie ให้เอง — bridge ไม่เคยเห็น และไม่มีอะไรลงดิสก์
+
+ส่วน socket ที่ต่อกับ bridge อยู่ใน **service worker** แทน เพราะหน้า `https://`
+ที่คุยกับ `http://127.0.0.1` จะไปติด mixed-content กับ Private Network Access
+ซึ่ง request จาก extension ไม่ติด · content script ยังถือ port ค้างไว้ด้วย เพราะ
+Chrome เก็บ MV3 worker ที่ว่างงานทิ้งทุก ~30 วินาที และข้อมูล SSE ขาเข้าไม่นับ
+ว่าเป็นกิจกรรม
+
+### ข้อจำกัดที่ทุกอย่างถูกออกแบบรอบ ๆ มัน
+
+ส่งได้แค่ข้อความของผู้ใช้เท่านั้น — ไม่มี system prompt ไม่มี transcript
+
+นั่นคือสิ่งที่ endpoint ยอมรับ · ถ้า array `messages` มี turn ของ **assistant**
+จะโดน `403` เปล่า ๆ จาก Google Frontend ตั้งแต่ก่อนโมเดลจะได้เห็น ·
+คุยหลายเทิร์นได้เพราะเซิร์ฟเวอร์เป็นเจ้าของบทสนทนา
+
+ตัว agent อยู่ *ภายใต้* ข้อนี้แทนที่จะฝืน: ส่งคำสั่งครั้งเดียวเป็นข้อความแรก ·
+รูปแบบ marker เป็นภาษาพูดเพราะทุกรูปแบบที่มีโครงสร้างเคยโดน 403 · เทิร์นที่โดน
+ปฏิเสธจะถูกผ่าครึ่งแล้วส่งใหม่ · `localhost` และพวกพ้องถูกแทนที่ขาออกเพราะ
+ตัวกรอง SSRF จับคำพวกนี้ · และบรรทัดที่ส่งไม่ได้ไม่ว่าขนาดไหนจะถูกตัดทิ้ง
+พร้อมหมายเหตุ แทนที่จะทำให้ทั้งรอบล้ม
+
+ทุกข้อคือแผลเป็น · เหตุผลอยู่ใน [aipass-bridge/README.md](aipass-bridge/README.md)
+และการไล่หาสาเหตุอยู่ใน [aipass-bridge/handoff.html](aipass-bridge/handoff.html)
+
+### โครงสร้าง
+
+| path | |
+|---|---|
+| [aipass-bridge/bridge/server.mjs](aipass-bridge/bridge/server.mjs) | ตัว bridge — HTTP server, job hub, OpenAI surface |
+| [aipass-bridge/extension/](aipass-bridge/extension/) | Chrome MV3 extension |
+| [aipass-bridge/agent/core.mjs](aipass-bridge/agent/core.mjs) | ตัว loop ของ agent ที่ไม่มี host อยู่ข้างใน |
+| [aipass-bridge/agent.mjs](aipass-bridge/agent.mjs) | หน้า CLI ของมัน |
+| [aipass-bridge/chat.mjs](aipass-bridge/chat.mjs) | client แชทใน terminal |
+| [aipass-bridge/vscode/](aipass-bridge/vscode/) | VS Code extension |
+| [aipass-bridge/test/](aipass-bridge/test/) | เทสต์ 67 ตัว |
+| [app/](app/) | แอป Next.js ที่ repo นี้ถูก scaffold มา — ไม่ได้แตะ |
+
+---
 
 ## เทสต์
 
@@ -163,7 +481,7 @@ Marketplace เพราะใช้อะไรไม่ได้เลยถ�
 npm test
 ```
 
-เทสต์ 67 ตัว ไม่มี dependency ใช้เวลาราว 2 วินาที
+เทสต์ 67 ตัว ไม่มี dependency ใช้เวลาราวสองวินาที ·
 [test/harness.mjs](aipass-bridge/test/harness.mjs) รัน bridge ตัวจริงเป็น
 subprocess คู่กับตัวแทน extension ที่เขียนสคริปต์ได้ ส่วน
 [test/vscode-stub.mjs](aipass-bridge/test/vscode-stub.mjs) ทำแบบเดียวกันกับ API
@@ -174,13 +492,19 @@ subprocess คู่กับตัวแทน extension ที่เขีย�
 ล่าสุดของผู้ใช้, การหมุนไปบทสนทนาถัดไปเมื่อเจอตัวที่ถูกล็อก, job ที่รอดมาได้แม้
 extension หลุดกลางสตรีม, การแทนที่ loopback แล้วแปลงกลับได้ครบ, การผ่าเทิร์นที่
 โดนปฏิเสธ, การตัดบรรทัดที่ส่งไม่ได้, `DONE` ที่มาก่อนเวลา, การปฏิเสธ path นอก
-root, dry run ที่ไม่แตะดิสก์ และฝั่ง editor: การแก้ไขที่ยังพักไว้จนกว่าจะกด apply
-กับเทิร์นถัดไปที่ต้องคุยต่อบทสนทนาเดิม ไม่ใช่เปิดอันใหม่
+root, dry run ที่ไม่แตะดิสก์, การแก้ไขฝั่ง editor ที่ยังพักไว้จนกว่าจะกด apply
+และ layout ของ `.vsix` ที่ต้องโหลดได้จริง
+
+---
 
 ## ข้อจำกัดที่ทราบ
 
-- ต้องเปิดแท็บ de.aipass.net ค้างไว้ content script ของมันถือ port ที่คอยกัน
-  ไม่ให้ MV3 service worker ถูกฆ่า — ถ้าไม่มี Chrome จะเก็บ worker ทิ้งทุก ~30 วินาที
-- ทุกข้อความจะไปโผล่ในประวัติแชทของบัญชี — เพราะนี่ใช้ตัวผลิตภัณฑ์จริง
-- คุยนาน ๆ กินเครดิต มีแค่ `gemini-3.1-flash-lite` ที่ใช้เครดิตฟรี และ
-  `npm run models` จะทำเครื่องหมายไว้ให้
+- **ต้องเปิดแท็บ de.aipass.net ค้างไว้** ปิดเมื่อไรทุกอย่างหยุด
+- **ทุกข้อความไปโผล่ในประวัติแชทของบัญชี** เพราะนี่คือผลิตภัณฑ์จริง
+- **คุยนาน ๆ กินเครดิต** มีแค่ `gemini-3.1-flash-lite` ที่ใช้เครดิตฟรี ·
+  `npm run models` ทำเครื่องหมายไว้ให้
+- **ไม่มี system prompt ไม่มี transcript** ดู
+  [ข้อจำกัด](#ข้อจำกัดที่ทุกอย่างถูกออกแบบรอบ-ๆ-มัน)
+- **VS Code extension ไม่เหมาะขึ้น Marketplace** เพราะใช้อะไรไม่ได้เลยถ้าไม่มี
+  bridge กับแท็บ browser
+- **Chrome เท่านั้น** extension เป็น MV3 และเรื่อง credential ทั้งหมดขึ้นกับมัน
